@@ -103,12 +103,12 @@ class Analyzer:
         return df
 
     @staticmethod
-    def analyze_convergence_by_lambda(fen, nodes=config.LC0_NODES, lambda_range=config.LAMBDA_SCAN):  # Direct access
+    def analyze_convergence_by_lambda(fen, lambda_range=config.LAMBDA_SCAN):  # Direct access
         """
         λ parametresine göre yakınsama: optimal hamle olasılığı yerine konsantrasyon raporlanır.
         X ekseni eşit aralıklı indekslerle gösterilir, etiketler gerçek lambda değerleriyle yazılır.
         """
-        print(f"\n--- Convergence Analysis Based on Lambda (per_ply_nodes={nodes}) ---")
+        print(f"\n--- Convergence Analysis Based on Lambda ---")
         engine = Engine.get_engine(config.LC0_PATH)
         try:
             optimal_probs = []
@@ -138,7 +138,7 @@ class Analyzer:
             p2, = ax2.plot(x, entropies, 'r-s', label='Entropy')
             ax2.set_ylabel('Entropy (bits)', color='red')
 
-            plt.title(f'Convergence Analysis with Lambda (nodes={nodes})')
+            plt.title(f'Convergence Analysis with Lambda')
             ax1.legend(handles=[p1, p2], labels=[p1.get_label(), p2.get_label()], loc='center right')
 
             plt.tight_layout()
@@ -517,9 +517,9 @@ class Analyzer:
             fen_list = fen_input
             single_fen = False
 
-        print(f"\n--- Position Complexity Impact Analysis ({len(fen_list)} positions, nodes={nodes}) ---")
+        print(f"\n--- Position Complexity Impact Analysis ({len(fen_list)} positions) ---")
 
-        cache_key = f"PI_position_complexity_{hash(str(fen_list))}_{lambda_val}_{nodes}_{sample_count}"
+        cache_key = f"PI_position_complexity_{hash(str(fen_list))}_{lambda_val}_{sample_count}"
 
         if use_cache:
             cached_result = Cache.get_cached_analysis(cache_key)
@@ -726,7 +726,7 @@ class Analyzer:
 
         found_true_move = true_gt in pi_counter
 
-        print(f"Path Integral Model (λ=0.7):")
+        print(f"Path Integral Model (λ=0.2):")
         print(f"  - Most Frequent Move: {pi_top_move}")
         print(f"  - Discovered the 'True' Move ({true_gt})? {'YES' if found_true_move else 'NO'}")
         if found_true_move:

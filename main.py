@@ -395,21 +395,6 @@ def main():
         print(f"   ❌ Error in Feynman path analogy validation: {e}")
         analogy_results = {'analogy_valid': False}
 
-    # 4. Cognitive Analogy Analysis (Discussion section)
-    print("\n=== Cognitive Analogy Analysis ===")
-    try:
-        cognitive_results = Analyzer.analyze_cognitive_analogy(target_fen)
-        human_entropy = cognitive_results['human']['entropy']
-        expert_entropy = cognitive_results['expert']['entropy']
-        if expert_entropy == 0:
-            entropy_ratio = float('nan')
-        else:
-            entropy_ratio = human_entropy / expert_entropy
-        print(f"Difference between human and expert decision making: entropy rate: {entropy_ratio:.2f}")
-    except Exception as e:
-        print(f"   ❌ Error in cognitive analogy analysis: {e}")
-        cognitive_results = {'human': {'entropy': 1.0}, 'expert': {'entropy': 1.0}}
-
     # 5. Dynamic Lambda Adaptation Experiment (Future Work)
     print("\n=== Dynamic Lambda Adaptation Experiment ===")
     try:
@@ -513,18 +498,6 @@ def main():
     else:
         print("✗ Feynman Path Integral analogy problematic")
 
-    # Cognitive analogy validation
-    if cognitive_results['expert']['entropy'] == 0:
-        human_expert_ratio = float('inf')
-        print("⚠️ Expert entropy is zero; ratio is undefined (division by zero).")
-    else:
-        human_expert_ratio = cognitive_results['human']['entropy'] / cognitive_results['expert']['entropy']
-    if human_expert_ratio > 1.2:
-        print("✓ Cognitive analogy VALID - Humans explore more")
-        print(f"  - Human/Expert entropy ratio: {human_expert_ratio:.2f}")
-    else:
-        print("✗ Cognitive analogy weak")
-
     # --- Kombinatorik Patlama Analizi ---
     print("\n=== Combinatorial Explosion Analysis ===")
     try:
@@ -535,7 +508,7 @@ def main():
     except Exception as e:
         print(f"   ❌ Error in combinatorial explosion analysis: {e}")
 
-    # --- Pozisyon Karma��ıklığı Etkisi Analizi ---
+    # --- Pozisyon Karmasıklığı Etkisi Analizi ---
     print("\n=== Position Complexity Impact Analysis ===")
     try:
         complexity_df = Analyzer.analyze_position_complexity_impact(list(FEN_TO_ANALYZE.values()), position_names=list(FEN_TO_ANALYZE.keys()))
