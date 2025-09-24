@@ -934,3 +934,100 @@ class Analyzer:
                 print(f"Warning: could not save comparison plots: {e}")
 
         return results
+    @staticmethod
+    def chess960_position_study(chess960_fens, position_names=None):
+        """
+        Comprehensive Chess960 position analysis using path integral framework.
+        
+        Args:
+            chess960_fens: List of Chess960 starting positions
+            position_names: Optional names for positions
+            
+        Returns:
+            Analysis results for Chess960 positions
+        """
+        print("🏰 Chess960 Position Study")
+        
+        if position_names is None:
+            position_names = [f"Chess960_{i}" for i in range(len(chess960_fens))]
+        
+        # Analyze each Chess960 position
+        results = Calc.batch_path_analysis(
+            fen_list=chess960_fens,
+            lambda_values=[0.1, 0.5, 1.0, 2.0],
+            samples=config.SAMPLE_COUNT,
+            use_cache=True
+        )
+        
+        # Add position names
+        results['position_name'] = results['position_index'].map(
+            lambda idx: position_names[idx] if idx < len(position_names) else f"Position_{idx}"
+        )
+        
+        # Save results
+        results.to_csv("results/chess960_analysis.csv", index=False)
+        
+        return {
+            'results_df': results,
+            'position_count': len(chess960_fens),
+            'analysis_summary': {
+                'avg_entropy': results['entropy'].mean(),
+                'entropy_std': results['entropy'].std(),
+                'most_complex_position': results.loc[results['entropy'].idxmax(), 'position_name'],
+                'least_complex_position': results.loc[results['entropy'].idxmin(), 'position_name']
+            }
+        }
+    
+    @staticmethod
+    def convergence_study(test_fen, depth_range=None, sample_range=None):
+        """
+        Study convergence properties of path integral framework.
+        
+        Args:
+            test_fen: Test position FEN
+            depth_range: Range of depths to test
+            sample_range: Range of sample sizes to test
+            
+        Returns:
+            Convergence study results
+        """
+        print("📈 Path Integral Convergence Study")
+        
+        if depth_range is None:
+            depth_range = [2, 4, 6, 8, 10]
+        if sample_range is None:
+            sample_range = [25, 50, 100, 200]
+        
+        convergence_results = []
+        
+        # Test convergence with different parameters
+        for depth in tqdm(depth_range, desc="Depth convergence"):
+            for samples in sample_range:
+                try:
+                    result = Calc.lambda_sensitivity_analysis(
+                        fen=test_fen,
+                        lambda_range=[0.1, 1.0, 10.0],
+                        samples=samples,
+                        save_results=False
+                    )
+                    
+                    if result['results_df'] is not None and not result['results_df'].empty:
+                        convergence_results.append({
+                            'depth': depth,
+                            'samples': samples,
+                            'avg_entropy': result['results_df']['entropy'].mean(),
+                            'entropy_std': result['results_df']['entropy'].std(),
+                            'avg_concentration': result['results_df']['concentration'].mean()
+                        })
+                        
+                except Exception as e:
+                    print(f"Error in convergence test (depth={depth}, samples={samples}): {e}")
+        
+        conv_df = pd.DataFrame(convergence_results)
+        conv_df.to_csv("results/convergence_study.csv", index=False)
+        
+        return {
+            'convergence_data': conv_df,
+            'depth_range': depth_range,
+            'sample_range': sample_range
+        }

@@ -2,3 +2,14 @@
 /__pycache__
 /results
 /scripts
+lc0_nodes_bench_results.csv
+lc0_pathlen_results.csv
+tests/test_lc0_policy_run.py
+adaptive_vs_stockfish_nodes.csv
+.github/copilot-instructionsv2.md
+.kiro/steering/tech.md
+.kiro/steering/structure.md
+PATH_INTEGRAL_FRAMEWORK_SUMMARY.md
+.kiro/steering/abstract.md
+FINAL_OPTIMIZATION_REPORT.md
+OPTIMIZATION_REPORT.md
