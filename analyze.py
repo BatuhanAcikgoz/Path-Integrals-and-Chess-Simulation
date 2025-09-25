@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from matplotlib.ticker import FixedFormatter
+import seaborn as sns
 from tqdm import tqdm
 from collections import Counter
 
@@ -624,56 +625,1007 @@ class Analyzer:
             fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 11))
             # 1. Complexity score vs sampling time (color: entropy)
             scatter = ax1.scatter(df['complexity_score'], df['sampling_time_sec'],
-                                  s=120, alpha=0.8, c=df['entropy'], cmap='viridis', edgecolor='black')
-            ax1.set_xlabel('Position Complexity Score (Legal Moves × Piece Count)')
-            ax1.set_ylabel('Sampling Time (sec)')
-            ax1.set_title('Complexity and Computational Cost')
-            cbar = plt.colorbar(scatter, ax=ax1, label='Entropy (bits)')
-            ax1.grid(True, alpha=0.3)
-            # Explanation
-            ax1.annotate('More complex positions usually take longer and may have higher entropy.',
-                         xy=(0.5, 1.05), xycoords='axes fraction', ha='center', fontsize=10, color='gray')
-            # 2. Legal move count vs concentration (top-1/top-3)
-            ax2.scatter(df['root_legal_moves'], df['conc_top1'], s=100, alpha=0.8, label='Top-1', marker='o', color='royalblue', edgecolor='black')
-            ax2.scatter(df['root_legal_moves'], df['conc_top3'], s=100, alpha=0.8, label='Top-3', marker='^', color='orange', edgecolor='black')
-            ax2.set_xlabel('Root Legal Move Count')
-            ax2.set_ylabel('Concentration (Mode Probability)')
-            ax2.set_title('Concentration vs Branching Factor')
-            ax2.legend()
-            ax2.grid(True, alpha=0.3)
-            ax2.annotate('As the root legal move count increases, concentration usually decreases.',
-                         xy=(0.5, 1.05), xycoords='axes fraction', ha='center', fontsize=10, color='gray')
-            # 3. Legal move count vs entropy
-            ax3.scatter(df['root_legal_moves'], df['entropy'], s=100, alpha=0.8, color='seagreen', edgecolor='black')
-            ax3.set_xlabel('Legal Move Count')
-            ax3.set_ylabel('Entropy (bits)')
-            ax3.set_title('Strategic Diversity vs Branching Factor')
-            ax3.grid(True, alpha=0.3)
-            ax3.annotate('More legal moves generally mean higher strategic diversity (entropy).',
-                         xy=(0.5, 1.05), xycoords='axes fraction', ha='center', fontsize=10, color='gray')
-            # 4. Next move mobility vs entropy
-            ax4.scatter(df['next_mobility_avg'], df['entropy'], s=100, alpha=0.8, color='purple', edgecolor='black')
-            ax4.set_xlabel('Average Next Move Mobility')
-            ax4.set_ylabel('Entropy (bits)')
-            ax4.set_title('Mobility and Exploration Behavior')
-            ax4.grid(True, alpha=0.3)
-            ax4.annotate('Positions with high mobility usually offer more exploration (entropy).',
-                         xy=(0.5, 1.05), xycoords='axes fraction', ha='center', fontsize=10, color='gray')
-            plt.tight_layout(rect=(0, 0.03, 1, 0.97))
-            output_file = "results/position_complexity_impact_overview.png"
-            # Short summary text below the figure
-            figtext = (
-                "These plots show how the model's exploration (entropy) and concentration (mode probability) behavior changes as chess position complexity increases. "
-                "Colors and markers highlight the relationship of entropy and concentration with position complexity. "
-                "More complex positions generally offer greater strategic diversity and lower concentration."
-            )
-            plt.figtext(0.5, 0.01, figtext, wrap=True, ha='center', fontsize=12, color='dimgray')
-        os.makedirs("results", exist_ok=True)
-        plt.savefig(output_file, dpi=300)
-        if not single_fen and output_file.endswith("_overview.png"):
-            plt.savefig("results/position_complexity_analysis.png", dpi=300)
+                                c=df['entropy'], cmap='viridis', alpha=0.7, s=60)
+            ax1.set_xlabel('Complexity Score (legal_moves × pieces)')
+            ax1.set_ylabel('Sampling Time (seconds)')
+            ax1.set_title('Complexity vs Performance')
+            plt.colorbar(scatter, ax=ax1, label='Entropy')
+
+            # 2. Entropy vs concentration
+            ax2.scatter(df['entropy'], df['conc_top1'], alpha=0.7, color='red', s=60)
+            ax2.set_xlabel('Entropy (bits)')
+            ax2.set_ylabel('Top-1 Concentration')
+            ax2.set_title('Entropy vs Concentration Trade-off')
+
+            # 3. Position complexity distribution
+            ax3.hist(df['complexity_score'], bins=10, alpha=0.7, color='lightblue', edgecolor='black')
+            ax3.set_xlabel('Complexity Score')
+            ax3.set_ylabel('Frequency')
+            ax3.set_title('Position Complexity Distribution')
+
+            # 4. Next move mobility analysis
+            ax4.scatter(df['root_legal_moves'], df['next_mobility_avg'],
+                       alpha=0.7, color='orange', s=60)
+            ax4.set_xlabel('Root Legal Moves')
+            ax4.set_ylabel('Average Next Move Mobility')
+            ax4.set_title('Root vs Next Move Mobility')
+
+            plt.tight_layout()
+            output_file = "results/position_complexity_analysis.png"
+
+        plt.savefig(output_file, dpi=300, bbox_inches='tight')
         plt.close()
-        print(f"Complexity analysis visualization saved: {output_file}")
+        print(f"   📊 Complexity analysis plot saved: {output_file}")
+
+    # === NEW COMPREHENSIVE ANALYSIS FUNCTIONS ===
+
+    @staticmethod
+    def _generate_comprehensive_depth_plots_with_variant(results, fen, variant_name="Standard"):
+        """
+        Enhanced version of _generate_comprehensive_depth_plots with variant support
+        and additional statistical analysis plots.
+        """
+        from experiments import Experiments
+        Experiments._generate_comprehensive_depth_plots(results, fen)
+
+        # Additional variant-specific analysis
+        lambda_metrics = results['metrics']['lambda_scan']
+        lambda_values = results['lambda_values']
+
+        # Generate variant-specific entropy-accuracy correlation plot
+        entropies = [lambda_metrics[lam]['entropy'] for lam in lambda_values]
+        accuracies = [lambda_metrics[lam]['accuracy'] for lam in lambda_values]
+
+        plt.figure(figsize=(10, 8))
+        plt.scatter(entropies, accuracies, s=100, alpha=0.7, c=lambda_values,
+                   cmap='viridis', edgecolors='black')
+        plt.colorbar(label='Lambda (λ)')
+        plt.xlabel('Entropy (bits)')
+        plt.ylabel('Concentration (mode probability)')
+        plt.title(f'Entropy-Accuracy Correlation: {variant_name}')
+        plt.grid(True, alpha=0.3)
+
+        # Add correlation coefficient
+        correlation = np.corrcoef(entropies, accuracies)[0, 1]
+        plt.text(0.05, 0.95, f'Correlation: {correlation:.3f}',
+                transform=plt.gca().transAxes, bbox=dict(boxstyle="round", facecolor='wheat'))
+
+        plt.tight_layout()
+        plt.savefig(f'results/entropy_accuracy_correlation_{variant_name.lower().replace(" ", "_")}.png',
+                   dpi=300, bbox_inches='tight')
+        plt.close()
+
+        print(f"   📊 Enhanced depth plots generated for {variant_name}")
+
+    @staticmethod
+    def pi_quantum_vs_lc0_chess960_experiment(chess960_positions=None, sample_count=None, save_results=True):
+        """
+        Comprehensive Chess960 experiment comparing PI quantum-limit vs LC0 across multiple positions.
+        Generates detailed statistical analysis and visualizations.
+        """
+        if chess960_positions is None:
+            # Sample Chess960 positions for testing
+            chess960_positions = [
+                ("r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4", "Chess960_Position_1"),
+                ("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2", "Chess960_Position_2"),
+                ("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 4 5", "Chess960_Position_3")
+            ]
+
+        if sample_count is None:
+            sample_count = config.SAMPLE_COUNT
+
+        print(f"\n=== PI Quantum vs LC0 Chess960 Experiment ===")
+        print(f"Positions: {len(chess960_positions)}")
+        print(f"Sample count: {sample_count}")
+
+        results = []
+
+        for fen, position_name in tqdm(chess960_positions, desc="Chess960 Analysis"):
+            print(f"\nAnalyzing {position_name}...")
+
+            # PI Quantum-limit sampling
+            pi_quantum_paths = Engine.sample_paths(fen, config.HIGH_DEPTH, config.LAMBDA,
+                                                 sample_count, mode='quantum_limit')
+            pi_quantum_entropy, pi_quantum_counter = Calc.compute_entropy(pi_quantum_paths)
+            pi_quantum_accuracy = Calc.top_move_concentration(pi_quantum_paths)
+
+            # LC0 analysis
+            lc0_opts = {"MultiPV": config.MULTIPV, "Temperature": config.LC0_TEMPERATURE}
+            lc0_moves, lc0_scores, lc0_time = Engine.lc0_top_moves_and_scores(
+                fen, depth=config.TARGET_DEPTH, multipv=config.MULTIPV, options=lc0_opts
+            )
+            lc0_probs = Calc.normalize_scores_to_probs(lc0_scores, config.LAMBDA)
+            lc0_entropy = -sum([p * np.log2(p) for p in lc0_probs if p > 0]) if lc0_probs else 0.0
+            lc0_accuracy = max(lc0_probs) if lc0_probs else 0.0
+
+            # Statistical comparison
+            kl_divergence = 0.0
+            if pi_quantum_counter and lc0_moves:
+                # Align move distributions for KL divergence
+                all_moves = set(list(pi_quantum_counter.keys()) + [str(m) for m in lc0_moves])
+                pi_dist = {move: pi_quantum_counter.get(move, 0) / sum(pi_quantum_counter.values())
+                          for move in all_moves}
+                lc0_dist = {move: lc0_probs[i] if i < len(lc0_probs) and str(lc0_moves[i]) == move else 1e-10
+                           for i, move in enumerate(all_moves)}
+
+                try:
+                    kl_divergence = Calc.kl_divergence(pi_dist, lc0_dist)
+                except:
+                    kl_divergence = float('inf')
+
+            result = {
+                'position_name': position_name,
+                'fen': fen,
+                'pi_quantum_entropy': pi_quantum_entropy,
+                'pi_quantum_accuracy': pi_quantum_accuracy,
+                'lc0_entropy': lc0_entropy,
+                'lc0_accuracy': lc0_accuracy,
+                'kl_divergence': kl_divergence,
+                'entropy_difference': pi_quantum_entropy - lc0_entropy,
+                'accuracy_difference': pi_quantum_accuracy - lc0_accuracy
+            }
+
+            results.append(result)
+            print(f"   PI Quantum: entropy={pi_quantum_entropy:.3f}, accuracy={pi_quantum_accuracy:.3f}")
+            print(f"   LC0: entropy={lc0_entropy:.3f}, accuracy={lc0_accuracy:.3f}")
+
+        # Save results
+        if save_results:
+            df = pd.DataFrame(results)
+            df.to_csv("results/pi_quantum_vs_lc0_chess960_results.csv", index=False)
+
+            # Generate comprehensive visualizations
+            Analyzer._generate_chess960_visualizations(df)
+
+        return results
+
+    @staticmethod
+    def _generate_chess960_visualizations(df):
+        """Generate comprehensive Chess960 analysis visualizations."""
+
+        # 1. Entropy comparison
+        plt.figure(figsize=(12, 8))
+        x = np.arange(len(df))
+        width = 0.35
+
+        plt.bar(x - width/2, df['pi_quantum_entropy'], width, label='PI Quantum', alpha=0.8)
+        plt.bar(x + width/2, df['lc0_entropy'], width, label='LC0', alpha=0.8)
+
+        plt.xlabel('Chess960 Positions')
+        plt.ylabel('Entropy (bits)')
+        plt.title('Entropy Comparison: PI Quantum vs LC0 (Chess960)')
+        plt.xticks(x, df['position_name'], rotation=45)
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig('results/chess960_entropy_comparison.png', dpi=300, bbox_inches='tight')
+        plt.close()
+
+        # 2. Accuracy comparison
+        plt.figure(figsize=(12, 8))
+        plt.bar(x - width/2, df['pi_quantum_accuracy'], width, label='PI Quantum', alpha=0.8)
+        plt.bar(x + width/2, df['lc0_accuracy'], width, label='LC0', alpha=0.8)
+
+        plt.xlabel('Chess960 Positions')
+        plt.ylabel('Accuracy (concentration)')
+        plt.title('Accuracy Comparison: PI Quantum vs LC0 (Chess960)')
+        plt.xticks(x, df['position_name'], rotation=45)
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig('results/chess960_accuracy_comparison.png', dpi=300, bbox_inches='tight')
+        plt.close()
+
+        # 3. Scatter plot: Entropy vs Accuracy
+        plt.figure(figsize=(10, 8))
+        plt.scatter(df['pi_quantum_entropy'], df['pi_quantum_accuracy'],
+                   label='PI Quantum', s=100, alpha=0.7)
+        plt.scatter(df['lc0_entropy'], df['lc0_accuracy'],
+                   label='LC0', s=100, alpha=0.7)
+
+        plt.xlabel('Entropy (bits)')
+        plt.ylabel('Accuracy (concentration)')
+        plt.title('Entropy vs Accuracy: Chess960 Positions')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig('results/chess960_entropy_accuracy_scatter.png', dpi=300, bbox_inches='tight')
+        plt.close()
+
+        print("   📊 Chess960 visualizations generated")
+
+    @staticmethod
+    def chess960_variant_game_result_histogram(game_results, save_results=True):
+        """Generate histogram of Chess960 game results."""
+        result_counts = pd.Series(game_results).value_counts()
+
+        plt.figure(figsize=(10, 6))
+        bars = plt.bar(result_counts.index, result_counts.values, alpha=0.8,
+                      color=['lightgreen', 'lightcoral', 'lightblue'])
+
+        plt.xlabel('Game Results')
+        plt.ylabel('Frequency')
+        plt.title('Chess960 Game Results Distribution')
+
+        # Add value labels on bars
+        for bar, count in zip(bars, result_counts.values):
+            plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.1,
+                    str(count), ha='center', va='bottom')
+
+        plt.grid(True, alpha=0.3, axis='y')
+        plt.tight_layout()
+
+        if save_results:
+            plt.savefig('results/chess960_game_results_histogram.png', dpi=300, bbox_inches='tight')
+        plt.close()
+
+        return result_counts
+
+    @staticmethod
+    def chess960_move_distribution_heatmap(move_data, save_results=True):
+        """Generate heatmap of move distributions across Chess960 positions."""
+        # Create move frequency matrix
+        all_moves = set()
+        for position_moves in move_data.values():
+            all_moves.update(position_moves.keys())
+
+        all_moves = sorted(list(all_moves))
+        positions = list(move_data.keys())
+
+        # Build frequency matrix
+        freq_matrix = np.zeros((len(positions), len(all_moves)))
+        for i, position in enumerate(positions):
+            for j, move in enumerate(all_moves):
+                freq_matrix[i, j] = move_data[position].get(move, 0)
+
+        # Normalize by row
+        row_sums = freq_matrix.sum(axis=1, keepdims=True)
+        freq_matrix = np.divide(freq_matrix, row_sums, out=np.zeros_like(freq_matrix), where=row_sums!=0)
+
+        plt.figure(figsize=(16, 8))
+        sns.heatmap(freq_matrix, xticklabels=all_moves, yticklabels=positions,
+                   cmap='YlOrRd', annot=False, fmt='.2f')
+        plt.title('Chess960 Move Distribution Heatmap')
+        plt.xlabel('Moves')
+        plt.ylabel('Positions')
+        plt.xticks(rotation=90)
+        plt.tight_layout()
+
+        if save_results:
+            plt.savefig('results/chess960_move_distribution_heatmap.png', dpi=300, bbox_inches='tight')
+        plt.close()
+
+    @staticmethod
+    def chess960_kl_topn_analysis(distributions, n_values=[1, 3, 5], save_results=True):
+        """Analyze KL divergence and top-N accuracy for Chess960 positions."""
+        results = []
+
+        for position_name, dist_data in distributions.items():
+            pi_dist = dist_data['pi_quantum']
+            lc0_dist = dist_data['lc0']
+
+            # Calculate KL divergence
+            kl_div = Calc.kl_divergence(pi_dist, lc0_dist)
+
+            # Calculate top-N accuracies
+            pi_sorted = sorted(pi_dist.items(), key=lambda x: x[1], reverse=True)
+            lc0_sorted = sorted(lc0_dist.items(), key=lambda x: x[1], reverse=True)
+
+            for n in n_values:
+                pi_topn = sum([prob for _, prob in pi_sorted[:n]])
+                lc0_topn = sum([prob for _, prob in lc0_sorted[:n]])
+
+                results.append({
+                    'position': position_name,
+                    'n': n,
+                    'pi_topn_accuracy': pi_topn,
+                    'lc0_topn_accuracy': lc0_topn,
+                    'kl_divergence': kl_div
+                })
+
+        df = pd.DataFrame(results)
+
+        if save_results:
+            df.to_csv('results/chess960_kl_topn_analysis.csv', index=False)
+
+            # Visualization
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+
+            # Top-N accuracy comparison
+            for n in n_values:
+                subset = df[df['n'] == n]
+                ax1.plot(subset.index, subset['pi_topn_accuracy'],
+                        label=f'PI Top-{n}', marker='o')
+                ax1.plot(subset.index, subset['lc0_topn_accuracy'],
+                        label=f'LC0 Top-{n}', marker='s')
+
+            ax1.set_xlabel('Position Index')
+            ax1.set_ylabel('Top-N Accuracy')
+            ax1.set_title('Top-N Accuracy Comparison')
+            ax1.legend()
+            ax1.grid(True, alpha=0.3)
+
+            # KL divergence
+            unique_positions = df['position'].unique()
+            kl_values = [df[df['position'] == pos]['kl_divergence'].iloc[0] for pos in unique_positions]
+            ax2.bar(range(len(unique_positions)), kl_values, alpha=0.8)
+            ax2.set_xlabel('Position Index')
+            ax2.set_ylabel('KL Divergence')
+            ax2.set_title('KL Divergence by Position')
+            ax2.grid(True, alpha=0.3, axis='y')
+
+            plt.tight_layout()
+            plt.savefig('results/chess960_kl_topn_analysis.png', dpi=300, bbox_inches='tight')
+            plt.close()
+
+        return df
+
+    @staticmethod
+    def chess960_game_duration_movecount_analysis(game_data, save_results=True):
+        """Analyze game duration and move count patterns in Chess960."""
+        durations = [game['duration'] for game in game_data if 'duration' in game]
+        move_counts = [game['move_count'] for game in game_data if 'move_count' in game]
+        results = [game['result'] for game in game_data if 'result' in game]
+
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
+
+        # Duration distribution
+        ax1.hist(durations, bins=20, alpha=0.7, edgecolor='black')
+        ax1.set_xlabel('Game Duration (minutes)')
+        ax1.set_ylabel('Frequency')
+        ax1.set_title('Chess960 Game Duration Distribution')
+        ax1.grid(True, alpha=0.3)
+
+        # Move count distribution
+        ax2.hist(move_counts, bins=20, alpha=0.7, edgecolor='black', color='orange')
+        ax2.set_xlabel('Move Count')
+        ax2.set_ylabel('Frequency')
+        ax2.set_title('Chess960 Move Count Distribution')
+        ax2.grid(True, alpha=0.3)
+
+        # Duration vs Move count
+        ax3.scatter(durations, move_counts, alpha=0.7, s=60)
+        ax3.set_xlabel('Game Duration (minutes)')
+        ax3.set_ylabel('Move Count')
+        ax3.set_title('Duration vs Move Count')
+        ax3.grid(True, alpha=0.3)
+
+        # Result distribution
+        result_counts = pd.Series(results).value_counts()
+        ax4.pie(result_counts.values, labels=result_counts.index, autopct='%1.1f%%')
+        ax4.set_title('Chess960 Game Results')
+
+        plt.tight_layout()
+
+        if save_results:
+            plt.savefig('results/chess960_game_duration_analysis.png', dpi=300, bbox_inches='tight')
+        plt.close()
+
+        # Statistical summary
+        stats_summary = {
+            'avg_duration': np.mean(durations) if durations else 0,
+            'avg_move_count': np.mean(move_counts) if move_counts else 0,
+            'duration_std': np.std(durations) if durations else 0,
+            'move_count_std': np.std(move_counts) if move_counts else 0,
+            'correlation': np.corrcoef(durations, move_counts)[0, 1] if len(durations) == len(move_counts) and len(durations) > 1 else 0
+        }
+
+        return stats_summary
+
+    @staticmethod
+    def chess960_complexity_entropy_accuracy_analysis(position_data, save_results=True):
+        """Analyze relationship between position complexity, entropy, and accuracy in Chess960."""
+        complexity_scores = []
+        entropies = []
+        accuracies = []
+        position_names = []
+
+        for pos_name, data in position_data.items():
+            # Calculate complexity score (legal moves * pieces)
+            board = chess.Board(data['fen'])
+            legal_moves = len(list(board.legal_moves))
+            pieces = len(board.piece_map())
+            complexity = legal_moves * pieces
+
+            complexity_scores.append(complexity)
+            entropies.append(data['entropy'])
+            accuracies.append(data['accuracy'])
+            position_names.append(pos_name)
+
+        # Statistical analysis
+        entropy_complexity_corr = np.corrcoef(complexity_scores, entropies)[0, 1]
+        accuracy_complexity_corr = np.corrcoef(complexity_scores, accuracies)[0, 1]
+        entropy_accuracy_corr = np.corrcoef(entropies, accuracies)[0, 1]
+
+        # Visualization
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
+
+        # Complexity vs Entropy
+        ax1.scatter(complexity_scores, entropies, alpha=0.7, s=80, c='blue')
+        ax1.set_xlabel('Complexity Score (legal_moves × pieces)')
+        ax1.set_ylabel('Entropy (bits)')
+        ax1.set_title(f'Complexity vs Entropy (r={entropy_complexity_corr:.3f})')
+        ax1.grid(True, alpha=0.3)
+
+        # Complexity vs Accuracy
+        ax2.scatter(complexity_scores, accuracies, alpha=0.7, s=80, c='red')
+        ax2.set_xlabel('Complexity Score')
+        ax2.set_ylabel('Accuracy (concentration)')
+        ax2.set_title(f'Complexity vs Accuracy (r={accuracy_complexity_corr:.3f})')
+        ax2.grid(True, alpha=0.3)
+
+        # Entropy vs Accuracy
+        ax3.scatter(entropies, accuracies, alpha=0.7, s=80, c='green')
+        ax3.set_xlabel('Entropy (bits)')
+        ax3.set_ylabel('Accuracy (concentration)')
+        ax3.set_title(f'Entropy vs Accuracy (r={entropy_accuracy_corr:.3f})')
+        ax3.grid(True, alpha=0.3)
+
+        # 3D scatter plot (complexity, entropy, accuracy)
+        from mpl_toolkits.mplot3d import Axes3D
+        ax4 = fig.add_subplot(224, projection='3d')
+        scatter = ax4.scatter(complexity_scores, entropies, accuracies,
+                            c=complexity_scores, cmap='viridis', s=60)
+        ax4.set_xlabel('Complexity')
+        ax4.set_ylabel('Entropy')
+        ax4.set_zlabel('Accuracy')
+        ax4.set_title('3D Relationship')
+
+        plt.tight_layout()
+
+        if save_results:
+            plt.savefig('results/chess960_complexity_entropy_accuracy.png', dpi=300, bbox_inches='tight')
+        plt.close()
+
+        analysis_results = {
+            'entropy_complexity_correlation': entropy_complexity_corr,
+            'accuracy_complexity_correlation': accuracy_complexity_corr,
+            'entropy_accuracy_correlation': entropy_accuracy_corr,
+            'complexity_scores': complexity_scores,
+            'entropies': entropies,
+            'accuracies': accuracies
+        }
+
+        return analysis_results
+
+    @staticmethod
+    def chess960_bootstrap_ci_analysis(data_samples, confidence_level=0.95, n_bootstrap=1000, save_results=True):
+        """Perform bootstrap confidence interval analysis for Chess960 data."""
+        def bootstrap_ci(data, n_bootstrap=1000, ci=0.95):
+            if len(data) == 0:
+                return 0, 0
+            boot_means = [np.mean(np.random.choice(data, size=len(data), replace=True))
+                         for _ in range(n_bootstrap)]
+            lower = np.percentile(boot_means, (1-ci)/2*100)
+            upper = np.percentile(boot_means, (1+(ci))/2*100)
+            return lower, upper
+
+        results = {}
+
+        for metric_name, data in data_samples.items():
+            if len(data) > 0:
+                mean_val = np.mean(data)
+                std_val = np.std(data)
+                ci_lower, ci_upper = bootstrap_ci(data, n_bootstrap, confidence_level)
+
+                results[metric_name] = {
+                    'mean': mean_val,
+                    'std': std_val,
+                    'ci_lower': ci_lower,
+                    'ci_upper': ci_upper,
+                    'ci_width': ci_upper - ci_lower
+                }
+
+        # Visualization
+        metrics = list(results.keys())
+        means = [results[m]['mean'] for m in metrics]
+        ci_lowers = [results[m]['ci_lower'] for m in metrics]
+        ci_uppers = [results[m]['ci_upper'] for m in metrics]
+
+        plt.figure(figsize=(12, 8))
+        x_pos = np.arange(len(metrics))
+
+        plt.errorbar(x_pos, means,
+                    yerr=[np.array(means) - np.array(ci_lowers),
+                          np.array(ci_uppers) - np.array(means)],
+                    fmt='o', capsize=5, capthick=2, markersize=8)
+
+        plt.xlabel('Metrics')
+        plt.ylabel('Values')
+        plt.title(f'Bootstrap Confidence Intervals ({confidence_level*100:.0f}%)')
+        plt.xticks(x_pos, metrics, rotation=45)
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+
+        if save_results:
+            plt.savefig('results/chess960_bootstrap_ci_analysis.png', dpi=300, bbox_inches='tight')
+
+            # Save numerical results
+            ci_df = pd.DataFrame(results).T
+            ci_df.to_csv('results/chess960_bootstrap_ci_results.csv')
+
+        plt.close()
+
+        return results
+
+    @staticmethod
+    def chess960_engine_comparison_analysis(engine_results, save_results=True):
+        """Comprehensive engine comparison analysis for Chess960."""
+        engines = list(engine_results.keys())
+        metrics = ['entropy', 'accuracy', 'time', 'move_diversity']
+
+        # Prepare data matrix
+        data_matrix = np.zeros((len(engines), len(metrics)))
+        for i, engine in enumerate(engines):
+            for j, metric in enumerate(metrics):
+                data_matrix[i, j] = engine_results[engine].get(metric, 0)
+
+        # Normalize data for radar chart
+        normalized_data = data_matrix.copy()
+        for j in range(len(metrics)):
+            col_max = np.max(data_matrix[:, j])
+            if col_max > 0:
+                normalized_data[:, j] = data_matrix[:, j] / col_max
+
+        # Radar chart
+        angles = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False).tolist()
+        angles += angles[:1]  # Complete the circle
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8), subplot_kw=dict(projection='polar'))
+
+        colors = ['red', 'blue', 'green', 'orange', 'purple']
+
+        for i, engine in enumerate(engines):
+            values = normalized_data[i].tolist()
+            values += values[:1]  # Complete the circle
+
+            ax1.plot(angles, values, 'o-', linewidth=2, label=engine, color=colors[i % len(colors)])
+            ax1.fill(angles, values, alpha=0.25, color=colors[i % len(colors)])
+
+        ax1.set_xticks(angles[:-1])
+        ax1.set_xticklabels(metrics)
+        ax1.set_ylim(0, 1)
+        ax1.set_title('Engine Performance Radar Chart (Normalized)')
+        ax1.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0))
+
+        # Bar chart comparison
+        x = np.arange(len(metrics))
+        width = 0.8 / len(engines)
+
+        for i, engine in enumerate(engines):
+            ax2 = plt.subplot(1, 2, 2)
+            ax2.bar(x + i * width, data_matrix[i], width, label=engine, alpha=0.8)
+
+        ax2.set_xlabel('Metrics')
+        ax2.set_ylabel('Values')
+        ax2.set_title('Engine Performance Comparison')
+        ax2.set_xticks(x + width * (len(engines) - 1) / 2)
+        ax2.set_xticklabels(metrics, rotation=45)
+        ax2.legend()
+        ax2.grid(True, alpha=0.3, axis='y')
+
+        plt.tight_layout()
+
+        if save_results:
+            plt.savefig('results/chess960_engine_comparison.png', dpi=300, bbox_inches='tight')
+
+            # Save comparison matrix
+            comparison_df = pd.DataFrame(data_matrix, index=engines, columns=metrics)
+            comparison_df.to_csv('results/chess960_engine_comparison_matrix.csv')
+
+        plt.close()
+
+        return data_matrix, normalized_data
+
+    @staticmethod
+    def pi_quantum_sensitivity_experiment(fen, lambda_range=None, depth_range=None,
+                                        sample_counts=None, save_results=True):
+        """
+        Comprehensive sensitivity analysis for PI quantum-limit mode across multiple parameters.
+        """
+        if lambda_range is None:
+            lambda_range = [0.01, 0.05, 0.1, 0.2, 0.5, 1.0]
+        if depth_range is None:
+            depth_range = [4, 8, 12, 16, 20]
+        if sample_counts is None:
+            sample_counts = [100, 250, 500, 1000]
+
+        print(f"\n=== PI Quantum Sensitivity Experiment ===")
+        print(f"Lambda range: {lambda_range}")
+        print(f"Depth range: {depth_range}")
+        print(f"Sample counts: {sample_counts}")
+
+        results = []
+
+        # Lambda sensitivity
+        print("\nLambda sensitivity analysis...")
+        for lam in tqdm(lambda_range, desc="Lambda sensitivity"):
+            paths = Engine.sample_paths(fen, config.HIGH_DEPTH, lam, config.SAMPLE_COUNT, mode='quantum_limit')
+            entropy, counter = Calc.compute_entropy(paths)
+            accuracy = Calc.top_move_concentration(paths)
+
+            results.append({
+                'parameter_type': 'lambda',
+                'parameter_value': lam,
+                'entropy': entropy,
+                'accuracy': accuracy,
+                'move_diversity': len(counter) if counter else 0
+            })
+
+        # Depth sensitivity
+        print("\nDepth sensitivity analysis...")
+        for depth in tqdm(depth_range, desc="Depth sensitivity"):
+            paths = Engine.sample_paths(fen, depth, config.LAMBDA, config.SAMPLE_COUNT, mode='quantum_limit')
+            entropy, counter = Calc.compute_entropy(paths)
+            accuracy = Calc.top_move_concentration(paths)
+
+            results.append({
+                'parameter_type': 'depth',
+                'parameter_value': depth,
+                'entropy': entropy,
+                'accuracy': accuracy,
+                'move_diversity': len(counter) if counter else 0
+            })
+
+        # Sample count sensitivity
+        print("\nSample count sensitivity analysis...")
+        for sample_count in tqdm(sample_counts, desc="Sample sensitivity"):
+            paths = Engine.sample_paths(fen, config.HIGH_DEPTH, config.LAMBDA, sample_count, mode='quantum_limit')
+            entropy, counter = Calc.compute_entropy(paths)
+            accuracy = Calc.top_move_concentration(paths)
+
+            results.append({
+                'parameter_type': 'sample_count',
+                'parameter_value': sample_count,
+                'entropy': entropy,
+                'accuracy': accuracy,
+                'move_diversity': len(counter) if counter else 0
+            })
+
+        df = pd.DataFrame(results)
+
+        if save_results:
+            df.to_csv('results/pi_quantum_sensitivity_results.csv', index=False)
+
+            # Generate sensitivity plots
+            Analyzer._generate_sensitivity_plots(df, lambda_range, depth_range, sample_counts)
+
+        return df
+
+    @staticmethod
+    def _generate_sensitivity_plots(df, lambda_range, depth_range, sample_counts):
+        """Generate sensitivity analysis plots."""
+        fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2, figsize=(16, 18))
+
+        # Lambda sensitivity - Entropy
+        lambda_data = df[df['parameter_type'] == 'lambda']
+        ax1.semilogx(lambda_data['parameter_value'], lambda_data['entropy'], 'o-', linewidth=2, markersize=8)
+        ax1.set_xlabel('Lambda (λ)')
+        ax1.set_ylabel('Entropy (bits)')
+        ax1.set_title('Lambda Sensitivity: Entropy')
+        ax1.grid(True, alpha=0.3)
+
+        # Lambda sensitivity - Accuracy
+        ax2.semilogx(lambda_data['parameter_value'], lambda_data['accuracy'], 's-', linewidth=2, markersize=8, color='red')
+        ax2.set_xlabel('Lambda (λ)')
+        ax2.set_ylabel('Accuracy (concentration)')
+        ax2.set_title('Lambda Sensitivity: Accuracy')
+        ax2.grid(True, alpha=0.3)
+
+        # Depth sensitivity - Entropy
+        depth_data = df[df['parameter_type'] == 'depth']
+        ax3.plot(depth_data['parameter_value'], depth_data['entropy'], 'o-', linewidth=2, markersize=8, color='green')
+        ax3.set_xlabel('Depth')
+        ax3.set_ylabel('Entropy (bits)')
+        ax3.set_title('Depth Sensitivity: Entropy')
+        ax3.grid(True, alpha=0.3)
+
+        # Depth sensitivity - Accuracy
+        ax4.plot(depth_data['parameter_value'], depth_data['accuracy'], 's-', linewidth=2, markersize=8, color='orange')
+        ax4.set_xlabel('Depth')
+        ax4.set_ylabel('Accuracy (concentration)')
+        ax4.set_title('Depth Sensitivity: Accuracy')
+        ax4.grid(True, alpha=0.3)
+
+        # Sample count sensitivity - Entropy
+        sample_data = df[df['parameter_type'] == 'sample_count']
+        ax5.semilogx(sample_data['parameter_value'], sample_data['entropy'], 'o-', linewidth=2, markersize=8, color='purple')
+        ax5.set_xlabel('Sample Count')
+        ax5.set_ylabel('Entropy (bits)')
+        ax5.set_title('Sample Count Sensitivity: Entropy')
+        ax5.grid(True, alpha=0.3)
+
+        # Sample count sensitivity - Accuracy
+        ax6.semilogx(sample_data['parameter_value'], sample_data['accuracy'], 's-', linewidth=2, markersize=8, color='brown')
+        ax6.set_xlabel('Sample Count')
+        ax6.set_ylabel('Accuracy (concentration)')
+        ax6.set_title('Sample Count Sensitivity: Accuracy')
+        ax6.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+        plt.savefig('results/pi_quantum_sensitivity_analysis.png', dpi=300, bbox_inches='tight')
+        plt.close()
+
+        print("   📊 Sensitivity analysis plots generated")
+
+    @staticmethod
+    def compare_policy_vs_quantum_sampling(fen, sample_count=None, save_results=True):
+        """
+        Compare policy-based sampling vs quantum-limit sampling approaches.
+        """
+        if sample_count is None:
+            sample_count = config.SAMPLE_COUNT
+
+        print(f"\n=== Policy vs Quantum Sampling Comparison ===")
+
+        # Policy-based sampling (competitive mode)
+        print("Running policy-based sampling...")
+        policy_paths = Engine.sample_paths(fen, config.TARGET_DEPTH, config.LAMBDA,
+                                         sample_count, mode='competitive')
+        policy_entropy, policy_counter = Calc.compute_entropy(policy_paths)
+        policy_accuracy = Calc.top_move_concentration(policy_paths)
+
+        # Quantum-limit sampling
+        print("Running quantum-limit sampling...")
+        quantum_paths = Engine.sample_paths(fen, config.HIGH_DEPTH, config.LAMBDA,
+                                          sample_count, mode='quantum_limit')
+        quantum_entropy, quantum_counter = Calc.compute_entropy(quantum_paths)
+        quantum_accuracy = Calc.top_move_concentration(quantum_paths)
+
+        # Statistical comparison
+        # KL divergence between distributions
+        all_moves = set(list(policy_counter.keys()) + list(quantum_counter.keys()))
+        policy_dist = {move: policy_counter.get(move, 0) / sum(policy_counter.values())
+                      for move in all_moves}
+        quantum_dist = {move: quantum_counter.get(move, 0) / sum(quantum_counter.values())
+                       for move in all_moves}
+
+        kl_policy_quantum = Calc.kl_divergence(policy_dist, quantum_dist)
+        kl_quantum_policy = Calc.kl_divergence(quantum_dist, policy_dist)
+
+        # Jensen-Shannon divergence
+        def js_divergence(p, q):
+            m = {move: 0.5 * (p.get(move, 0) + q.get(move, 0)) for move in set(list(p.keys()) + list(q.keys()))}
+            return 0.5 * Calc.kl_divergence(p, m) + 0.5 * Calc.kl_divergence(q, m)
+
+        js_div = js_divergence(policy_dist, quantum_dist)
+
+        results = {
+            'policy_entropy': policy_entropy,
+            'policy_accuracy': policy_accuracy,
+            'policy_move_diversity': len(policy_counter),
+            'quantum_entropy': quantum_entropy,
+            'quantum_accuracy': quantum_accuracy,
+            'quantum_move_diversity': len(quantum_counter),
+            'kl_policy_quantum': kl_policy_quantum,
+            'kl_quantum_policy': kl_quantum_policy,
+            'js_divergence': js_div,
+            'entropy_ratio': quantum_entropy / policy_entropy if policy_entropy > 0 else float('inf'),
+            'accuracy_ratio': quantum_accuracy / policy_accuracy if policy_accuracy > 0 else float('inf')
+        }
+
+        if save_results:
+            # Visualization
+            fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
+
+            # Entropy and Accuracy comparison
+            methods = ['Policy-based', 'Quantum-limit']
+            entropies = [policy_entropy, quantum_entropy]
+            accuracies = [policy_accuracy, quantum_accuracy]
+
+            ax1.bar(methods, entropies, alpha=0.8, color=['lightblue', 'lightcoral'])
+            ax1.set_ylabel('Entropy (bits)')
+            ax1.set_title('Entropy Comparison')
+            ax1.grid(True, alpha=0.3, axis='y')
+
+            ax2.bar(methods, accuracies, alpha=0.8, color=['lightgreen', 'lightyellow'])
+            ax2.set_ylabel('Accuracy (concentration)')
+            ax2.set_title('Accuracy Comparison')
+            ax2.grid(True, alpha=0.3, axis='y')
+
+            # Move diversity comparison
+            diversities = [len(policy_counter), len(quantum_counter)]
+            ax3.bar(methods, diversities, alpha=0.8, color=['orange', 'purple'])
+            ax3.set_ylabel('Number of Unique Moves')
+            ax3.set_title('Move Diversity Comparison')
+            ax3.grid(True, alpha=0.3, axis='y')
+
+            # Divergence metrics
+            divergences = ['KL(P||Q)', 'KL(Q||P)', 'JS Divergence']
+            div_values = [kl_policy_quantum, kl_quantum_policy, js_div]
+            ax4.bar(divergences, div_values, alpha=0.8, color=['red', 'blue', 'green'])
+            ax4.set_ylabel('Divergence')
+            ax4.set_title('Distribution Divergence Metrics')
+            ax4.grid(True, alpha=0.3, axis='y')
+
+            plt.tight_layout()
+            plt.savefig('results/policy_vs_quantum_sampling_comparison.png', dpi=300, bbox_inches='tight')
+            plt.close()
+
+            # Save numerical results
+            results_df = pd.DataFrame([results])
+            results_df.to_csv('results/policy_vs_quantum_sampling_results.csv', index=False)
+
+            print("   📊 Policy vs Quantum sampling comparison completed")
+
+        return results
+
+    @staticmethod
+    def quantum_classical_transition_analysis(fen, lambda_values=None, save_results=True):
+        """
+        Enhanced quantum-classical transition analysis with comprehensive statistical testing.
+        """
+        if lambda_values is None:
+            lambda_values = np.logspace(-2, 1, 20)  # From 0.01 to 10
+
+        print(f"\n=== Enhanced Quantum-Classical Transition Analysis ===")
+        print(f"Lambda range: {lambda_values[0]:.3f} to {lambda_values[-1]:.3f}")
+
+        results = []
+
+        for lam in tqdm(lambda_values, desc="Transition analysis"):
+            # Sample with both modes
+            competitive_paths = Engine.sample_paths(fen, config.TARGET_DEPTH, lam,
+                                                  config.SAMPLE_COUNT, mode='competitive')
+            quantum_paths = Engine.sample_paths(fen, config.HIGH_DEPTH, lam,
+                                               config.SAMPLE_COUNT, mode='quantum_limit')
+
+            # Calculate metrics
+            comp_entropy, comp_counter = Calc.compute_entropy(competitive_paths)
+            comp_accuracy = Calc.top_move_concentration(competitive_paths)
+
+            quantum_entropy, quantum_counter = Calc.compute_entropy(quantum_paths)
+            quantum_accuracy = Calc.top_move_concentration(quantum_paths)
+
+            # Transition indicators
+            entropy_ratio = quantum_entropy / comp_entropy if comp_entropy > 0 else 1.0
+            accuracy_ratio = quantum_accuracy / comp_accuracy if comp_accuracy > 0 else 1.0
+
+            results.append({
+                'lambda': lam,
+                'competitive_entropy': comp_entropy,
+                'competitive_accuracy': comp_accuracy,
+                'quantum_entropy': quantum_entropy,
+                'quantum_accuracy': quantum_accuracy,
+                'entropy_ratio': entropy_ratio,
+                'accuracy_ratio': accuracy_ratio,
+                'entropy_difference': quantum_entropy - comp_entropy,
+                'accuracy_difference': quantum_accuracy - comp_accuracy
+            })
+
+        df = pd.DataFrame(results)
+
+        if save_results:
+            df.to_csv('results/quantum_classical_transition_detailed.csv', index=False)
+
+            # Generate transition plots
+            Analyzer._generate_transition_plots(df, lambda_values)
+
+            # Statistical analysis
+            Analyzer._analyze_transition_statistics(df)
+
+        return df
+
+    @staticmethod
+    def _generate_transition_plots(df, lambda_values):
+        """Generate comprehensive transition analysis plots."""
+        fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2, figsize=(16, 18))
+
+        # Entropy transition
+        ax1.semilogx(df['lambda'], df['competitive_entropy'], 'o-', label='Competitive', linewidth=2)
+        ax1.semilogx(df['lambda'], df['quantum_entropy'], 's-', label='Quantum-limit', linewidth=2)
+        ax1.set_xlabel('Lambda (λ)')
+        ax1.set_ylabel('Entropy (bits)')
+        ax1.set_title('Entropy: Quantum-Classical Transition')
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+
+        # Accuracy transition
+        ax2.semilogx(df['lambda'], df['competitive_accuracy'], 'o-', label='Competitive', linewidth=2)
+        ax2.semilogx(df['lambda'], df['quantum_accuracy'], 's-', label='Quantum-limit', linewidth=2)
+        ax2.set_xlabel('Lambda (λ)')
+        ax2.set_ylabel('Accuracy (concentration)')
+        ax2.set_title('Accuracy: Quantum-Classical Transition')
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+
+        # Entropy ratio
+        ax3.semilogx(df['lambda'], df['entropy_ratio'], 'o-', color='purple', linewidth=2)
+        ax3.axhline(y=1, color='red', linestyle='--', alpha=0.7, label='Equal entropy')
+        ax3.set_xlabel('Lambda (λ)')
+        ax3.set_ylabel('Entropy Ratio (Quantum/Competitive)')
+        ax3.set_title('Entropy Ratio Transition')
+        ax3.legend()
+        ax3.grid(True, alpha=0.3)
+
+        # Accuracy ratio
+        ax4.semilogx(df['lambda'], df['accuracy_ratio'], 's-', color='orange', linewidth=2)
+        ax4.axhline(y=1, color='red', linestyle='--', alpha=0.7, label='Equal accuracy')
+        ax4.set_xlabel('Lambda (λ)')
+        ax4.set_ylabel('Accuracy Ratio (Quantum/Competitive)')
+        ax4.set_title('Accuracy Ratio Transition')
+        ax4.legend()
+        ax4.grid(True, alpha=0.3)
+
+        # Entropy difference
+        ax5.semilogx(df['lambda'], df['entropy_difference'], 'o-', color='green', linewidth=2)
+        ax5.axhline(y=0, color='red', linestyle='--', alpha=0.7, label='No difference')
+        ax5.set_xlabel('Lambda (λ)')
+        ax5.set_ylabel('Entropy Difference (Quantum - Competitive)')
+        ax5.set_title('Entropy Difference')
+        ax5.legend()
+        ax5.grid(True, alpha=0.3)
+
+        # Phase diagram
+        ax6.scatter(df['competitive_entropy'], df['quantum_entropy'],
+                   c=df['lambda'], cmap='viridis', s=60, alpha=0.7)
+        ax6.plot([0, max(df['competitive_entropy'])], [0, max(df['competitive_entropy'])],
+                'r--', alpha=0.7, label='Equal entropy line')
+        ax6.set_xlabel('Competitive Entropy')
+        ax6.set_ylabel('Quantum Entropy')
+        ax6.set_title('Quantum-Classical Phase Diagram')
+        ax6.legend()
+        ax6.grid(True, alpha=0.3)
+
+        plt.colorbar(ax6.collections[0], ax=ax6, label='Lambda (λ)')
+        plt.tight_layout()
+        plt.savefig('results/quantum_classical_transition_comprehensive.png', dpi=300, bbox_inches='tight')
+        plt.close()
+
+        print("   📊 Comprehensive transition plots generated")
+
+    @staticmethod
+    def _analyze_transition_statistics(df):
+        """Perform statistical analysis of quantum-classical transition."""
+        # Find transition points
+        entropy_crossover = None
+        accuracy_crossover = None
+
+        for i in range(len(df) - 1):
+            # Entropy crossover (where quantum becomes less than competitive)
+            if (df.iloc[i]['entropy_ratio'] > 1.0 and df.iloc[i+1]['entropy_ratio'] <= 1.0 and
+                entropy_crossover is None):
+                entropy_crossover = df.iloc[i]['lambda']
+
+            # Accuracy crossover
+            if (df.iloc[i]['accuracy_ratio'] < 1.0 and df.iloc[i+1]['accuracy_ratio'] >= 1.0 and
+                accuracy_crossover is None):
+                accuracy_crossover = df.iloc[i]['lambda']
+
+        # Statistical tests
+        from scipy import stats
+
+        # Test for significant difference in entropy
+        entropy_ttest = stats.ttest_rel(df['quantum_entropy'], df['competitive_entropy'])
+
+        # Test for significant difference in accuracy
+        accuracy_ttest = stats.ttest_rel(df['quantum_accuracy'], df['competitive_accuracy'])
+
+        # Correlation analysis
+        entropy_corr = stats.pearsonr(df['lambda'], df['entropy_difference'])
+        accuracy_corr = stats.pearsonr(df['lambda'], df['accuracy_difference'])
+
+        # Save statistical summary
+        stats_summary = {
+            'entropy_crossover_lambda': entropy_crossover,
+            'accuracy_crossover_lambda': accuracy_crossover,
+            'entropy_ttest_statistic': entropy_ttest.statistic,
+            'entropy_ttest_pvalue': entropy_ttest.pvalue,
+            'accuracy_ttest_statistic': accuracy_ttest.statistic,
+            'accuracy_ttest_pvalue': accuracy_ttest.pvalue,
+            'entropy_lambda_correlation': entropy_corr[0],
+            'entropy_lambda_correlation_pvalue': entropy_corr[1],
+            'accuracy_lambda_correlation': accuracy_corr[0],
+            'accuracy_lambda_correlation_pvalue': accuracy_corr[1]
+        }
+
+        with open('results/quantum_classical_transition_statistics.txt', 'w') as f:
+            for key, value in stats_summary.items():
+                f.write(f"{key}: {value}\n")
+
+        print("   📊 Transition statistical analysis completed")
+
+        return stats_summary
 
     @staticmethod
     def analyze_horizon_effect(fen, fen_name, shallow_depth=5, deep_depth=100, pi_mode='competitive', pi_lambda=None, sample_count=None):

@@ -231,7 +231,7 @@ def main():
             for lam in config.LAMBDA_SCAN:
                 try:
                     # use_cache=False ensures we actually sample; mode='quantum_limit' requests policy sampling
-                    q_paths = Engine.sample_paths(fen, config.TARGET_DEPTH, lam, config.SAMPLE_COUNT, use_cache=False, mode='quantum_limit')
+                    q_paths = Engine.sample_paths(fen, config.HIGH_DEPTH, lam, config.SAMPLE_COUNT, use_cache=False, mode='quantum_limit')
                     q_entropy, q_counter = Calc.compute_entropy(q_paths)
                     q_accuracy = max(q_counter.values()) / sum(q_counter.values()) if q_counter else 0.0
                 except Exception as e:
@@ -551,7 +551,7 @@ def main():
 
     # İstatistiksel Validasyon
     print("\n" + "="*60)
-    print("STATISTICAL VALIDATION & HYPOTHESIS TESTING")
+    print("COMPREHENSIVE STATISTICAL VALIDATION & HYPOTHESIS TESTING")
     print("="*60)
 
     if not pi_df_default.empty and len(lambda_entropies) >= 3:
@@ -588,6 +588,47 @@ def main():
                     complexity_scores, performance_scores
                 )
 
+        # Test 4: Normality Tests
+        normality_entropy = statistical_validator.test_normality(lambda_entropies, "Shapiro-Wilk")
+        normality_accuracy = statistical_validator.test_normality(lambda_accuracies, "Shapiro-Wilk")
+
+        # Test 5: Homoscedasticity Test
+        if len(lambda_entropies) >= 3 and len(lambda_accuracies) >= 3:
+            homoscedasticity_test = statistical_validator.test_homoscedasticity(lambda_entropies, lambda_accuracies)
+
+        # Test 6: Independence Test
+        if len(lambda_entropies) >= 3 and len(lambda_accuracies) >= 3:
+            independence_test = statistical_validator.test_independence(lambda_entropies, lambda_accuracies)
+
+        # Test 7: Bootstrap Confidence Intervals
+        entropy_ci = statistical_validator.bootstrap_confidence_interval(lambda_entropies, np.mean)
+        accuracy_ci = statistical_validator.bootstrap_confidence_interval(lambda_accuracies, np.mean)
+
+        # Test 8: Effect Size Analysis
+        if len(lambda_entropies) >= 3 and len(lambda_accuracies) >= 3:
+            effect_size_cohen = statistical_validator.effect_size_analysis(lambda_entropies, lambda_accuracies, "cohen_d")
+            effect_size_hedges = statistical_validator.effect_size_analysis(lambda_entropies, lambda_accuracies, "hedges_g")
+
+        # Test 9: Comprehensive ANOVA (if multiple groups available)
+        if len(pi_scan_results_by_name) >= 3:
+            entropy_groups = []
+            group_names = []
+            for name, pi_df in pi_scan_results_by_name.items():
+                if not pi_df.empty and len(pi_df) > 1:
+                    entropy_groups.append(pi_df['entropy'].tolist())
+                    group_names.append(name)
+            
+            if len(entropy_groups) >= 3:
+                anova_result = statistical_validator.comprehensive_anova(*entropy_groups, group_names=group_names)
+
+        # Test 10: Bayesian T-test
+        if len(lambda_entropies) >= 3 and len(lambda_accuracies) >= 3:
+            bayesian_test = statistical_validator.bayesian_t_test(lambda_entropies, lambda_accuracies)
+
+        # Test 11: Robust Statistics Analysis
+        robust_entropy = statistical_validator.robust_statistics_analysis(lambda_entropies)
+        robust_accuracy = statistical_validator.robust_statistics_analysis(lambda_accuracies)
+
         # Multiple comparison correction
         all_p_values = [r.get('p_value') for r in statistical_validator.results_log
                        if r.get('p_value') is not None]
@@ -597,33 +638,145 @@ def main():
         # İstatistiksel grafikler oluştur
         create_statistical_plots(statistical_validator)
 
-        # --- İstatistiksel Güç ve Ek Metrikler ---
-        # Entropi ve doğruluk için bootstrap güven aralığı
-        def bootstrap_ci(data, n_bootstrap=1000, ci=0.95):
-            boot_means = [np.mean(np.random.choice(data, size=len(data), replace=True)) for _ in range(n_bootstrap)]
-            lower = np.percentile(boot_means, (1-ci)/2*100)
-            upper = np.percentile(boot_means, (1+(ci))/2*100)
-            return lower, upper
+        # Generate comprehensive statistical report
+        statistical_report = statistical_validator.generate_statistical_report()
+        with open("results/comprehensive_statistical_report.txt", "w", encoding="utf-8") as f:
+            f.write(statistical_report)
+        print("   📄 Comprehensive statistical report saved: results/comprehensive_statistical_report.txt")
 
-        if len(lambda_entropies) >= 3:
-            entropy_ci = bootstrap_ci(lambda_entropies)
-            accuracy_ci = bootstrap_ci(lambda_accuracies)
-            print(f"Bootstrap CI (entropy): {entropy_ci[0]:.3f} – {entropy_ci[1]:.3f}")
-            print(f"Bootstrap CI (accuracy): {accuracy_ci[0]:.3f} – {accuracy_ci[1]:.3f}")
-            # Cohen's d
-            cohen_d = (float(np.mean(lambda_entropies)) - float(np.mean(lambda_accuracies))) / np.sqrt((float(np.std(lambda_entropies)) ** 2 + float(np.std(lambda_accuracies)) ** 2) / 2)
-            print(f"Cohen's d (entropy vs accuracy): {cohen_d:.3f}")
-            # İstatistiksel güç analizi
-            effect_size = abs(cohen_d)
-            sample_size = len(lambda_entropies) + len(lambda_accuracies)
-            power_result = statistical_validator.power_analysis(effect_size, sample_size)
-            print(f"Statistical Power: {power_result['power']:.3f} (adequate: {power_result['adequate_power']})")
-            # Sonuçları dosyaya kaydet
-            with open("results/statistical_power_summary.txt", "w", encoding="utf-8") as f:
-                f.write(f"Bootstrap CI (entropy): {entropy_ci[0]:.3f} – {entropy_ci[1]:.3f}\n")
-                f.write(f"Bootstrap CI (accuracy): {accuracy_ci[0]:.3f} – {accuracy_ci[1]:.3f}\n")
-                f.write(f"Cohen's d (entropy vs accuracy): {cohen_d:.3f}\n")
-                f.write(f"Statistical Power: {power_result['power']:.3f} (adequate: {power_result['adequate_power']})\n")
+    # === NEW COMPREHENSIVE ANALYSIS FUNCTIONS ===
+    
+    print("\n" + "="*60)
+    print("COMPREHENSIVE ANALYSIS SUITE")
+    print("="*60)
+
+    # 1. Enhanced Depth Analysis with Variants
+    print("\n🔬 Running Enhanced Depth Analysis...")
+    try:
+        depth_results = Experiments.path_integral_depth_scan_experiment(
+            fen=target_fen, 
+            lambda_values=config.LAMBDA_SCAN[:5],  # Limit for performance
+            depth_values=[4, 8, 12, 16],
+            sample_count=config.SAMPLE_COUNT,
+            save_results=True
+        )
+        Experiments._generate_comprehensive_depth_plots_with_variant(depth_results, target_fen, "Standard_Opening")
+        print("   ✓ Enhanced depth analysis completed")
+    except Exception as e:
+        print(f"   ❌ Error in enhanced depth analysis: {e}")
+
+    # 2. PI Quantum vs LC0 Chess960 Experiment
+    print("\n🔬 Running PI Quantum vs LC0 Chess960 Experiment...")
+    try:
+        chess960_results = Experiments.pi_quantum_vs_lc0_chess960_experiment(
+            chess960_positions=None,  # Use default positions
+            sample_count=config.SAMPLE_COUNT // 2,  # Reduce for performance
+            save_results=True
+        )
+        print("   ✓ Chess960 experiment completed")
+    except Exception as e:
+        print(f"   ❌ Error in Chess960 experiment: {e}")
+
+    # 3. PI Quantum Sensitivity Experiment
+    print("\n🔬 Running PI Quantum Sensitivity Experiment...")
+    try:
+        sensitivity_results = Analyzer.pi_quantum_sensitivity_experiment(
+            fen=target_fen,
+            lambda_range=[0.01, 0.05, 0.1, 0.2, 0.5],
+            depth_range=[4, 8, 12, 16],
+            sample_counts=[100, 250, 500],
+            save_results=True
+        )
+        print("   ✓ Quantum sensitivity analysis completed")
+    except Exception as e:
+        print(f"   ❌ Error in quantum sensitivity analysis: {e}")
+
+    # 4. Policy vs Quantum Sampling Comparison
+    print("\n🔬 Running Policy vs Quantum Sampling Comparison...")
+    try:
+        sampling_comparison = Analyzer.compare_policy_vs_quantum_sampling(
+            fen=target_fen,
+            sample_count=config.SAMPLE_COUNT,
+            save_results=True
+        )
+        print("   ✓ Policy vs Quantum sampling comparison completed")
+    except Exception as e:
+        print(f"   ❌ Error in sampling comparison: {e}")
+
+    # 5. Enhanced Quantum-Classical Transition Analysis
+    print("\n🔬 Running Enhanced Quantum-Classical Transition Analysis...")
+    try:
+        transition_results = Analyzer.quantum_classical_transition_analysis(
+            fen=target_fen,
+            lambda_values=np.logspace(-2, 1, 15),  # From 0.01 to 10, 15 points
+            save_results=True
+        )
+        print("   ✓ Enhanced transition analysis completed")
+    except Exception as e:
+        print(f"   ❌ Error in enhanced transition analysis: {e}")
+
+    # 6. Chess960 Additional Analysis Functions
+    print("\n🔬 Running Chess960 Additional Analysis...")
+    try:
+        # Sample game results for demonstration
+        sample_game_results = ['1-0', '0-1', '1/2-1/2', '1-0', '1/2-1/2', '0-1', '1-0']
+        game_histogram = Analyzer.chess960_variant_game_result_histogram(sample_game_results)
+        
+        # Sample move data for heatmap
+        sample_move_data = {
+            'Position_1': {'e4': 0.4, 'd4': 0.3, 'Nf3': 0.2, 'c4': 0.1},
+            'Position_2': {'e4': 0.5, 'd4': 0.2, 'Nf3': 0.2, 'c4': 0.1},
+            'Position_3': {'d4': 0.4, 'e4': 0.3, 'c4': 0.2, 'Nf3': 0.1}
+        }
+        Analyzer.chess960_move_distribution_heatmap(sample_move_data)
+        
+        # Sample distributions for KL analysis
+        sample_distributions = {
+            'Position_1': {
+                'pi_quantum': {'e4': 0.4, 'd4': 0.3, 'Nf3': 0.2, 'c4': 0.1},
+                'lc0': {'e4': 0.5, 'd4': 0.25, 'Nf3': 0.15, 'c4': 0.1}
+            },
+            'Position_2': {
+                'pi_quantum': {'e4': 0.5, 'd4': 0.2, 'Nf3': 0.2, 'c4': 0.1},
+                'lc0': {'e4': 0.45, 'd4': 0.25, 'Nf3': 0.2, 'c4': 0.1}
+            }
+        }
+        kl_analysis = Analyzer.chess960_kl_topn_analysis(sample_distributions)
+        
+        # Sample game duration data
+        sample_game_data = [
+            {'duration': 45, 'move_count': 60, 'result': '1-0'},
+            {'duration': 30, 'move_count': 40, 'result': '0-1'},
+            {'duration': 60, 'move_count': 80, 'result': '1/2-1/2'}
+        ]
+        duration_stats = Analyzer.chess960_game_duration_movecount_analysis(sample_game_data)
+        
+        # Sample position complexity data
+        sample_position_data = {
+            'Position_1': {'fen': target_fen, 'entropy': 2.5, 'accuracy': 0.4},
+            'Position_2': {'fen': target_fen, 'entropy': 2.8, 'accuracy': 0.3},
+            'Position_3': {'fen': target_fen, 'entropy': 2.2, 'accuracy': 0.5}
+        }
+        complexity_analysis = Analyzer.chess960_complexity_entropy_accuracy_analysis(sample_position_data)
+        
+        # Bootstrap CI analysis
+        sample_data = {
+            'entropy': lambda_entropies,
+            'accuracy': lambda_accuracies
+        }
+        bootstrap_results = Analyzer.chess960_bootstrap_ci_analysis(sample_data)
+        
+        # Engine comparison analysis
+        sample_engine_results = {
+            'PI_Quantum': {'entropy': 2.5, 'accuracy': 0.4, 'time': 1.2, 'move_diversity': 15},
+            'LC0': {'entropy': 2.2, 'accuracy': 0.5, 'time': 0.8, 'move_diversity': 12},
+            'Stockfish': {'entropy': 1.8, 'accuracy': 0.6, 'time': 0.5, 'move_diversity': 8}
+        }
+        engine_comparison = Analyzer.chess960_engine_comparison_analysis(sample_engine_results)
+        
+        print("   ✓ Chess960 additional analysis completed")
+    except Exception as e:
+        print(f"   ❌ Error in Chess960 additional analysis: {e}")
 
     # Literatür Karşılaştırması
     print("\n" + "="*60)
@@ -841,7 +994,7 @@ def main():
         # pi_quantum_sensitivity_experiment
         if hasattr(Experiments, 'pi_quantum_sensitivity_experiment'):
             try:
-                Experiments.pi_quantum_sensitivity_experiment(target_fen=target_fen, lambda_scan=config.LAMBDA_SCAN, depth_scan=config.DEPTH_SCAN, save_results=True)
+                Experiments.pi_quantum_sensitivity_experiment(fen=config.FEN, save_results=True)
                 print("   ✓ pi_quantum_sensitivity_experiment tamamlandı.")
             except Exception as e:
                 print(f"   ❌ pi_quantum_sensitivity_experiment hata: {e}")

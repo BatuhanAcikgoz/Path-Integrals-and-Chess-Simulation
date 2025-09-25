@@ -6,6 +6,7 @@ import chess.pgn
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+import seaborn as sns
 from tqdm import tqdm
 
 import config  # Direct module import for better performance
@@ -287,47 +288,6 @@ class Experiments:
         print("  - lambda_depth_heatmap.png")
         print("  - move_distribution_bar_chart.png")
         print("  - convergence_vs_depth.png")
-
-    @staticmethod  
-    def _generate_multi_position_plots(results_by_position):
-        """Generate comparison plots across multiple positions."""
-        plt.switch_backend('Agg')
-        
-        # Extract data for plotting
-        positions = list(results_by_position.keys())
-        
-        # Position complexity vs concentration analysis
-        complexities = []
-        accuracies_by_lambda = {lam: [] for lam in [0.05, 0.2, 0.5]}
-        
-        for pos_key, pos_results in results_by_position.items():
-            lambda_metrics = pos_results['metrics']['lambda_scan']
-            
-            # Use entropy as complexity measure
-            avg_entropy = np.mean([lambda_metrics[lam]['entropy'] for lam in lambda_metrics.keys()])
-            complexities.append(avg_entropy)
-            
-            # Collect concentration for each lambda
-            for lam in accuracies_by_lambda.keys():
-                if lam in lambda_metrics:
-                    accuracies_by_lambda[lam].append(lambda_metrics[lam]['accuracy'])
-        
-        # Plot position complexity vs concentration
-        plt.figure(figsize=(12, 8))
-        for i, lam in enumerate(accuracies_by_lambda.keys()):
-            plt.scatter(complexities, accuracies_by_lambda[lam], 
-                       label=f'λ={lam}', s=100, alpha=0.7)
-        
-        plt.xlabel('Position Complexity (Average Entropy)')
-        plt.ylabel('Concentration (mode probability)')
-        plt.title('Position Complexity vs Concentration\n(Multiple FEN Positions)')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.savefig('results/multi_fen_complexity_analysis.png', dpi=300, bbox_inches='tight')
-        plt.close()
-        
-        print("Generated multi-FEN analysis plot:")
-        print("  - multi_fen_complexity_analysis.png")
 
     @staticmethod
     def dynamic_lambda_adaptation_experiment(fen):
@@ -782,7 +742,7 @@ class Experiments:
             game = chess.pgn.Game()
             game.headers["Event"] = f"PI-QUANTUM vs Stockfish Chess960 Match {match_idx+1}"
             game.headers["Site"] = "Local"
-            game.headers["Variant"] = f"Chess960 #{variant_info['variant']}"
+            # game.headers["Variant"] = f"Chess960 #{variant_info['variant']}"  # Removed to avoid engine variant errors
             game.headers["VariantDesc"] = variant_info['desc']
             game.headers["White"] = "PI-QUANTUM Player" if pi_is_white else "Stockfish Player"
             game.headers["Black"] = "Stockfish Player" if pi_is_white else "PI-QUANTUM Player"
@@ -797,7 +757,7 @@ class Experiments:
                     # PI-QUANTUM Player: try mode arg, fallback if not supported
                     warning_mode = None
                     try:
-                        paths = Engine.sample_paths(board.fen(), config.TARGET_DEPTH, pi_lambda, config.SAMPLE_COUNT, mode='quantum_limit')
+                        paths = Engine.sample_paths(board.fen(), config.HIGH_DEPTH, pi_lambda, config.SAMPLE_COUNT, mode='quantum_limit')
                         engine_type = "PI-QUANTUM"
                     except Exception as e:
                         # If something else went wrong, re-raise after recording a warning
@@ -900,7 +860,7 @@ class Experiments:
             game = chess.pgn.Game()
             game.headers["Event"] = f"PI-Competitive vs Stockfish Chess960 Match {match_idx+1}"
             game.headers["Site"] = "Local"
-            game.headers["Variant"] = f"Chess960 #{variant_info['variant']}"
+            # game.headers["Variant"] = f"Chess960 #{variant_info['variant']}"  # Removed to avoid engine variant errors
             game.headers["VariantDesc"] = variant_info['desc']
             game.headers["White"] = "PI-Competitive Player" if pi_is_white else "Stockfish Player"
             game.headers["Black"] = "Stockfish Player" if pi_is_white else "PI-Competitive Player"
@@ -1026,7 +986,6 @@ class Experiments:
         fname = f"results/entropy_accuracy_vs_lambda_variant_{variant_num}.png" if variant_num is not None else "results/entropy_accuracy_vs_lambda_standard.png"
         plt.savefig(fname, dpi=300, bbox_inches='tight')
         plt.close()
-        # Diğer figürler için benzer şekilde varyant bilgisini başlığa ekleyebilirsiniz.
 
     @staticmethod
     def pi_quantum_vs_lc0_chess960_experiment(match_count=5, max_moves=500, save_results=True):
@@ -1046,7 +1005,7 @@ class Experiments:
             game = chess.pgn.Game()
             game.headers["Event"] = f"PI vs Lc0 Chess960 Match {match_idx+1}"
             game.headers["Site"] = "Local"
-            game.headers["Variant"] = f"Chess960 #{variant_info['variant']}"
+            # game.headers["Variant"] = f"Chess960 #{variant_info['variant']}"  # Removed to avoid engine variant errors
             game.headers["VariantDesc"] = variant_info['desc']
             game.headers["White"] = "PI Player" if pi_is_white else "Lc0 Player"
             game.headers["Black"] = "Lc0 Player" if pi_is_white else "PI Player"
@@ -1062,7 +1021,7 @@ class Experiments:
                     # PI-QUANTUM Player: try mode arg, fallback if not supported
                     warning_mode = None
                     try:
-                        paths = Engine.sample_paths(board.fen(), config.TARGET_DEPTH, pi_lambda, config.SAMPLE_COUNT, mode='quantum_limit')
+                        paths = Engine.sample_paths(board.fen(), config.HIGH_DEPTH, pi_lambda, config.SAMPLE_COUNT, mode='quantum_limit')
                         engine_type = "PI-QUANTUM"
                     except Exception as e:
                         paths = []
@@ -1162,7 +1121,7 @@ class Experiments:
             game = chess.pgn.Game()
             game.headers["Event"] = f"PI vs Stockfish Chess960 Match {match_idx+1}"
             game.headers["Site"] = "Local"
-            game.headers["Variant"] = f"Chess960 #{variant_info['variant']}"
+            # game.headers["Variant"] = f"Chess960 #{variant_info['variant']}"  # Removed to avoid engine variant errors
             game.headers["VariantDesc"] = variant_info['desc']
             game.headers["White"] = "PI Player" if pi_is_white else "Stockfish Player"
             game.headers["Black"] = "Stockfish Player" if pi_is_white else "PI Player"
@@ -1177,7 +1136,7 @@ class Experiments:
                     # PI-QUANTUM Player: try mode arg, fallback if not supported
                     warning_mode = None
                     try:
-                        paths = Engine.sample_paths(board.fen(), config.TARGET_DEPTH, pi_lambda, config.SAMPLE_COUNT, mode='quantum_limit')
+                        paths = Engine.sample_paths(board.fen(), config.HIGH_DEPTH, pi_lambda, config.SAMPLE_COUNT, mode='quantum_limit')
                         engine_type = "PI-QUANTUM"
                     except TypeError:
                         # Older Engine.sample_paths may not accept mode; fallback without it
@@ -1326,7 +1285,7 @@ class Experiments:
         print("Varyant bazlı entropi ve konsantrasyon analizleri tamamlandı.")
 
     @staticmethod
-    def chess960_color_effect_analysis():
+    def chess960_color_effect_analysis(save_results=True):
         """
         PI'nin beyaz/siyah olduğu Chess960 maçlarında metrik farkı ve istatistiksel testler.
         Sonuçlar: CSV, Cohen's d, p-değeri, figür.
@@ -1335,9 +1294,13 @@ class Experiments:
         import seaborn as sns
         import config
         # PI vs Lc0 Chess960 maç sonuçlarını oku
-        df = pd.read_csv("results/pi_vs_lc0_chess960_results.csv")
-        # PI beyaz ve siyah olduğunda accuracy/entropy farkı
-        perf_df = pd.read_csv("results/pi_vs_lc0_chess960_performance.csv")
+        try:
+            df = pd.read_csv("results/pi_vs_lc0_chess960_results.csv")
+            perf_df = pd.read_csv("results/pi_vs_lc0_chess960_performance.csv")
+        except FileNotFoundError as e:
+            print(f"Chess960 sonuç dosyaları bulunamadı: {e}")
+            print("Önce Chess960 deneylerini çalıştırın.")
+            return
         # Sadece ilk hamleler
         first_moves = perf_df[perf_df["move_number"] == 1]
         white_acc = first_moves[first_moves["pi_is_white"] == True]["move"].count()
@@ -1366,7 +1329,7 @@ class Experiments:
         plt.close()
 
     @staticmethod
-    def chess960_variant_game_result_histogram():
+    def chess960_variant_game_result_histogram(save_results=True):
         """
         Her Chess960 varyantı için PI vs Lc0 ve PI vs Stockfish maç sonuçlarını histogram olarak sunar.
         """
@@ -1400,7 +1363,7 @@ class Experiments:
         print("Varyantlar arası oyun sonucu histogramları oluşturuldu.")
 
     @staticmethod
-    def chess960_move_distribution_heatmap():
+    def chess960_move_distribution_heatmap(save_results=True):
         """
         Her Chess960 varyantı için ilk 5 hamlenin olasılık dağılımı ve optimal hamleye yakınsama hızını ısı haritası olarak gösterir.
         """
@@ -1442,7 +1405,7 @@ class Experiments:
         print("Hamle dağılımı ve optimal hamle ısı haritası oluşturuldu.")
 
     @staticmethod
-    def chess960_kl_topn_analysis():
+    def chess960_kl_topn_analysis(save_results=True):
         """
         Her Chess960 varyantı için PI ve rakip motorun hamle dağılımları arasındaki KL diverjansı ve Top-N doğruluk metriklerini karşılaştırır.
         """
@@ -1525,7 +1488,7 @@ class Experiments:
         print("KL diverjansı ve Top-N doğruluk analizleri tamamlandı.")
 
     @staticmethod
-    def chess960_game_duration_movecount_analysis():
+    def chess960_game_duration_movecount_analysis(save_results=True):
         """
         Her Chess960 varyantı için ortalama hamle sayısı ve oyun süresi (saniye) karşılaştırması yapar.
         Sonuçlar: CSV ve figür.
@@ -1566,7 +1529,7 @@ class Experiments:
         print("Oyun süresi ve hamle sayısı analizleri tamamlandı.")
 
     @staticmethod
-    def chess960_complexity_entropy_accuracy_analysis():
+    def chess960_complexity_entropy_accuracy_analysis(save_results=True):
         """
         Her Chess960 varyantında pozisyon karmaşıklığı (complexity score) ile entropi ve accuracy ilişkisini inceler.
         Sonuçlar: CSV ve scatter plot.
@@ -1621,7 +1584,7 @@ class Experiments:
         print("Pozisyon karmaşıklığı ve entropi/accuracy ilişkisi analizleri tamamlandı.")
 
     @staticmethod
-    def chess960_bootstrap_ci_analysis(metric="entropy", n_bootstrap=1000):
+    def chess960_bootstrap_ci_analysis(metric="entropy", n_bootstrap=1000, save_results=True):
         """
         Her Chess960 varyantı için entropi veya accuracy metriklerinin bootstrap ile güven aralığını hesaplar.
         Sonuçlar: CSV ve errorbar plot.
@@ -1677,7 +1640,7 @@ class Experiments:
         print(f"Bootstrap güven aralığı ({metric}) analizleri tamamlandı.")
 
     @staticmethod
-    def chess960_engine_comparison_analysis():
+    def chess960_engine_comparison_analysis(save_results=True):
         """
         Her Chess960 varyantı için PI, Lc0 ve Stockfish motorlarının entropi ve accuracy metriklerini karşılaştırır.
         Sonuçlar: CSV ve barplot.
@@ -1994,3 +1957,178 @@ class Experiments:
                 print(f"Warning: could not generate heatmaps: {e}")
 
         return detailed_df, summary_df
+    # === NEW COMPREHENSIVE EXPERIMENTAL FUNCTIONS ===
+    
+    @staticmethod
+    def _generate_comprehensive_depth_plots_with_variant(results, fen, variant_name="Standard"):
+        """
+        Enhanced version of _generate_comprehensive_depth_plots with variant support
+        and additional statistical analysis plots.
+        """
+        Experiments._generate_comprehensive_depth_plots(results, fen)
+        
+        # Additional variant-specific analysis
+        lambda_metrics = results['metrics']['lambda_scan']
+        lambda_values = results['lambda_values']
+        
+        # Generate variant-specific entropy-accuracy correlation plot
+        entropies = [lambda_metrics[lam]['entropy'] for lam in lambda_values]
+        accuracies = [lambda_metrics[lam]['accuracy'] for lam in lambda_values]
+        
+        plt.figure(figsize=(10, 8))
+        plt.scatter(entropies, accuracies, s=100, alpha=0.7, c=lambda_values, 
+                   cmap='viridis', edgecolors='black')
+        plt.colorbar(label='Lambda (λ)')
+        plt.xlabel('Entropy (bits)')
+        plt.ylabel('Concentration (mode probability)')
+        plt.title(f'Entropy-Accuracy Correlation: {variant_name}')
+        plt.grid(True, alpha=0.3)
+        
+        # Add correlation coefficient
+        correlation = np.corrcoef(entropies, accuracies)[0, 1]
+        plt.text(0.05, 0.95, f'Correlation: {correlation:.3f}', 
+                transform=plt.gca().transAxes, bbox=dict(boxstyle="round", facecolor='wheat'))
+        
+        plt.tight_layout()
+        plt.savefig(f'results/entropy_accuracy_correlation_{variant_name.lower().replace(" ", "_")}.png', 
+                   dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"   📊 Enhanced depth plots generated for {variant_name}")
+
+    @staticmethod
+    def pi_quantum_vs_lc0_chess960_experiment(chess960_positions=None, sample_count=None, save_results=True):
+        """
+        Comprehensive Chess960 experiment comparing PI quantum-limit vs LC0 across multiple positions.
+        Generates detailed statistical analysis and visualizations.
+        """
+        if chess960_positions is None:
+            # Sample Chess960 positions for testing
+            chess960_positions = [
+                ("r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4", "Chess960_Position_1"),
+                ("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2", "Chess960_Position_2"),
+                ("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w KQkq - 4 5", "Chess960_Position_3")
+            ]
+        
+        if sample_count is None:
+            sample_count = config.SAMPLE_COUNT
+            
+        print(f"\n=== PI Quantum vs LC0 Chess960 Experiment ===")
+        print(f"Positions: {len(chess960_positions)}")
+        print(f"Sample count: {sample_count}")
+        
+        results = []
+        
+        for fen, position_name in tqdm(chess960_positions, desc="Chess960 Analysis"):
+            print(f"\nAnalyzing {position_name}...")
+            
+            # PI Quantum-limit sampling
+            pi_quantum_paths = Engine.sample_paths(fen, config.HIGH_DEPTH, config.LAMBDA, 
+                                                 sample_count, mode='quantum_limit')
+            pi_quantum_entropy, pi_quantum_counter = Calc.compute_entropy(pi_quantum_paths)
+            pi_quantum_accuracy = Calc.top_move_concentration(pi_quantum_paths)
+            
+            # LC0 analysis
+            lc0_opts = {"MultiPV": config.MULTIPV, "Temperature": config.LC0_TEMPERATURE}
+            lc0_moves, lc0_scores, lc0_time = Engine.lc0_top_moves_and_scores(
+                fen, depth=config.TARGET_DEPTH, multipv=config.MULTIPV, options=lc0_opts
+            )
+            lc0_probs = Calc.normalize_scores_to_probs(lc0_scores, config.LAMBDA)
+            lc0_entropy = -sum([p * np.log2(p) for p in lc0_probs if p > 0]) if lc0_probs else 0.0
+            lc0_accuracy = max(lc0_probs) if lc0_probs else 0.0
+            
+            # Statistical comparison
+            kl_divergence = 0.0
+            if pi_quantum_counter and lc0_moves:
+                # Align move distributions for KL divergence
+                all_moves = set(list(pi_quantum_counter.keys()) + [str(m) for m in lc0_moves])
+                pi_dist = {move: pi_quantum_counter.get(move, 0) / sum(pi_quantum_counter.values()) 
+                          for move in all_moves}
+                lc0_dist = {move: lc0_probs[i] if i < len(lc0_probs) and str(lc0_moves[i]) == move else 1e-10 
+                           for i, move in enumerate(all_moves)}
+                
+                try:
+                    kl_divergence = Calc.kl_divergence(pi_dist, lc0_dist)
+                except:
+                    kl_divergence = float('inf')
+            
+            result = {
+                'position_name': position_name,
+                'fen': fen,
+                'pi_quantum_entropy': pi_quantum_entropy,
+                'pi_quantum_accuracy': pi_quantum_accuracy,
+                'lc0_entropy': lc0_entropy,
+                'lc0_accuracy': lc0_accuracy,
+                'kl_divergence': kl_divergence,
+                'entropy_difference': pi_quantum_entropy - lc0_entropy,
+                'accuracy_difference': pi_quantum_accuracy - lc0_accuracy
+            }
+            
+            results.append(result)
+            print(f"   PI Quantum: entropy={pi_quantum_entropy:.3f}, accuracy={pi_quantum_accuracy:.3f}")
+            print(f"   LC0: entropy={lc0_entropy:.3f}, accuracy={lc0_accuracy:.3f}")
+        
+        # Save results
+        if save_results:
+            df = pd.DataFrame(results)
+            df.to_csv("results/pi_quantum_vs_lc0_chess960_results.csv", index=False)
+            
+            # Generate comprehensive visualizations
+            Experiments._generate_chess960_visualizations(df)
+            
+        return results
+
+    @staticmethod
+    def _generate_chess960_visualizations(df):
+        """Generate comprehensive Chess960 analysis visualizations."""
+        
+        # 1. Entropy comparison
+        plt.figure(figsize=(12, 8))
+        x = np.arange(len(df))
+        width = 0.35
+        
+        plt.bar(x - width/2, df['pi_quantum_entropy'], width, label='PI Quantum', alpha=0.8)
+        plt.bar(x + width/2, df['lc0_entropy'], width, label='LC0', alpha=0.8)
+        
+        plt.xlabel('Chess960 Positions')
+        plt.ylabel('Entropy (bits)')
+        plt.title('Entropy Comparison: PI Quantum vs LC0 (Chess960)')
+        plt.xticks(x, df['position_name'], rotation=45)
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig('results/chess960_entropy_comparison.png', dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # 2. Accuracy comparison
+        plt.figure(figsize=(12, 8))
+        plt.bar(x - width/2, df['pi_quantum_accuracy'], width, label='PI Quantum', alpha=0.8)
+        plt.bar(x + width/2, df['lc0_accuracy'], width, label='LC0', alpha=0.8)
+        
+        plt.xlabel('Chess960 Positions')
+        plt.ylabel('Accuracy (concentration)')
+        plt.title('Accuracy Comparison: PI Quantum vs LC0 (Chess960)')
+        plt.xticks(x, df['position_name'], rotation=45)
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig('results/chess960_accuracy_comparison.png', dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # 3. Scatter plot: Entropy vs Accuracy
+        plt.figure(figsize=(10, 8))
+        plt.scatter(df['pi_quantum_entropy'], df['pi_quantum_accuracy'], 
+                   label='PI Quantum', s=100, alpha=0.7)
+        plt.scatter(df['lc0_entropy'], df['lc0_accuracy'], 
+                   label='LC0', s=100, alpha=0.7)
+        
+        plt.xlabel('Entropy (bits)')
+        plt.ylabel('Accuracy (concentration)')
+        plt.title('Entropy vs Accuracy: Chess960 Positions')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig('results/chess960_entropy_accuracy_scatter.png', dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print("   📊 Chess960 visualizations generated")

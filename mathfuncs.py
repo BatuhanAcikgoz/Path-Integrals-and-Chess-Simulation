@@ -1,4 +1,5 @@
 import os
+import time
 from collections import Counter, defaultdict
 
 import chess
@@ -10,6 +11,7 @@ import seaborn as sns
 from tqdm import tqdm
 
 import config
+from cache import Cache
 from engine import Engine
 
 
@@ -30,7 +32,7 @@ class Calc:
         Returns:
             Normalized probability distribution
         """
-        if not scores:
+        if scores is None or len(scores) == 0:
             return np.array([])
             
         arr = np.array(scores, dtype=np.float64)
@@ -431,7 +433,7 @@ class Calc:
             Dictionary with probabilities, diagnostics, and resampling info
         - Optional resampled path set
         """
-        if not cp_rewards or len(cp_rewards) == 0:
+        if cp_rewards is None or len(cp_rewards) == 0:
             return {
                 'probabilities': [],
                 'entropy': 0.0,
@@ -1453,48 +1455,6 @@ class Calc:
         return {move: count / total for move, count in counter.items()}
 
     @staticmethod
-    def dual_mode_convergence_analysis(fen=None, save_results=True):
-        """
-        Hem competitive hem quantum_limit modunda path-integral analizleri yapar ve sonuçları karşılaştırır.
-        Her iki mod için entropi, doğruluk, n-gram, coverage ve konsantrasyon metriklerini CSV ve PNG olarak kaydeder.
-        """
-        from mathfuncs import Calc
-        results = {}
-        for mode in ["competitive", "quantum_limit"]:
-            print(f"\n=== {mode.upper()} MOD ANALİZİ ===")
-            # Sampling ve metrik analiz
-            paths = Engine.sample_paths(fen, config.TARGET_DEPTH, config.LAMBDA, config.SAMPLE_COUNT, mode=mode)
-            entropy, counter = Calc.compute_entropy(paths)
-            accuracy = Calc.top_move_concentration(paths)
-            # N-gram analizi ve figür
-            from plots import plot_ngram_frequencies
-            plot_ngram_frequencies(paths, n=3)
-            # Sonuçları kaydet
-            df = pd.DataFrame({
-                'mode': [mode]*len(counter),
-                'move': list(counter.keys()),
-                'frequency': list(counter.values())
-            })
-            fname = f"results/first_move_distribution_{mode}.csv"
-            df.to_csv(fname, index=False)
-            print(f"✓ {mode} modunda analiz tamamlandı. Entropi: {entropy:.3f}, Doğruluk: {accuracy:.3f}, CSV: {fname}")
-            results[mode] = {
-                'paths': paths,
-                'entropy': entropy,
-                'accuracy': accuracy,
-                'counter': counter
-            }
-        # Karşılaştırmalı özet tablo
-        summary = pd.DataFrame({
-            'mode': ['competitive', 'quantum_limit'],
-            'entropy': [results['competitive']['entropy'], results['quantum_limit']['entropy']],
-            'accuracy': [results['competitive']['accuracy'], results['quantum_limit']['accuracy']]
-        })
-        summary.to_csv("results/dual_mode_summary.csv", index=False)
-        print("✓ Karşılaştırmalı özet tablo kaydedildi: results/dual_mode_summary.csv")
-        return results, summary
-
-    @staticmethod
     def path_integral_analysis(fen, lambda_values=None, samples=None, depth=None, save_results=True):
         """
         Comprehensive path integral analysis implementing the framework described in the requirements.
@@ -1827,7 +1787,7 @@ class Calc:
 
         # 1) Quantum empirical via sample_paths (quantum_limit)
         print(f"[QC] Sampling quantum_limit: samples={samples_quantum}, depth={depth}, lambda={lambda_quantum}")
-        paths_q = Engine.sample_paths(fen, depth, lambda_quantum, samples_quantum, mode='quantum_limit')
+        paths_q = Engine.sample_paths(fen, config.HIGH_DEPTH, lambda_quantum, samples_quantum, mode='quantum_limit')
         firsts_q = [str(p[0]) for p in paths_q if p]
         counter_q = Counter(firsts_q)
         total_q = sum(counter_q.values())
@@ -1836,7 +1796,7 @@ class Calc:
 
         # 2) Competitive empirical via sample_paths (competitive)
         print(f"[QC] Sampling competitive: samples={samples_competitive}, depth={depth}, lambda={lambda_competitive}")
-        paths_c = Engine.sample_paths(fen, depth, lambda_competitive, samples_competitive, mode='competitive')
+        paths_c = Engine.sample_paths(fen, config.TARGET_DEPTH, lambda_competitive, samples_competitive, mode='competitive')
         firsts_c = [str(p[0]) for p in paths_c if p]
         counter_c = Counter(firsts_c)
         total_c = sum(counter_c.values())
@@ -1927,148 +1887,6 @@ class Calc:
 
         return df, metrics
 
-
-    @staticmethod
-    def demonstrate_path_integral_framework():
-        """
-        Demonstration of the Path-Integral-inspired probabilistic decision-making framework.
-        
-        This function shows how to use the framework with sample data and generates
-        all the required deliverables as specified in the requirements.
-        """
-        print("\n=== PATH INTEGRAL FRAMEWORK DEMONSTRATION ===")
-        
-        # Sample data for demonstration
-        print("1. Setting up sample data...")
-        
-        # Sample policy probabilities (from LC0 or similar)
-        policy_probs = [0.3, 0.25, 0.2, 0.15, 0.1]  # 5 candidate moves
-        
-        # Sample cumulative centipawn rewards for different paths
-        cp_rewards = [150, 120, 100, 80, 50]  # Higher is better
-        
-        # Test different lambda values
-        lambda_test_values = [0.1, 0.5, 1.0, 2.0, 5.0]
-        
-        print(f"Policy probabilities: {policy_probs}")
-        print(f"CP rewards: {cp_rewards}")
-        print(f"Testing λ values: {lambda_test_values}")
-        
-        results = []
-        
-        # Test framework with different lambda values
-        for lam in lambda_test_values:
-            print(f"\n2. Testing λ = {lam}")
-            
-            # Apply path integral framework
-            pi_result = Calc.path_integral_framework(
-                policy_probs=policy_probs,
-                cp_rewards=cp_rewards,
-                lam=lam,
-                resampling_threshold=3  # N/2 where N=5
-            )
-            
-            print(f"   Probabilities: {[f'{p:.3f}' for p in pi_result['probabilities']]}")
-            print(f"   Entropy: {pi_result['entropy']:.3f} bits")
-            print(f"   ESS: {pi_result['ess']:.3f}")
-            print(f"   Concentration: {pi_result['concentration']:.3f}")
-            print(f"   Resampled: {pi_result['resampled']}")
-            
-            results.append({
-                'lambda': lam,
-                'entropy': pi_result['entropy'],
-                'ess': pi_result['ess'],
-                'concentration': pi_result['concentration'],
-                'resampled': pi_result['resampled']
-            })
-        
-        # Create summary DataFrame
-        df = pd.DataFrame(results)
-        
-        print("\n3. Summary Analysis:")
-        print(f"   λ with highest entropy (exploration): {df.loc[df['entropy'].idxmax(), 'lambda']}")
-        print(f"   λ with highest concentration (exploitation): {df.loc[df['concentration'].idxmax(), 'lambda']}")
-        print(f"   Entropy range: {df['entropy'].min():.3f} - {df['entropy'].max():.3f}")
-        
-        # Save results
-        os.makedirs("results", exist_ok=True)
-        df.to_csv("results/path_integral_demo.csv", index=False)
-        
-        # Generate visualization
-        import matplotlib.pyplot as plt
-        
-        fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        
-        # Entropy vs Lambda
-        axes[0].semilogx(df['lambda'], df['entropy'], 'o-', linewidth=2, markersize=8)
-        axes[0].set_xlabel('Lambda (λ)')
-        axes[0].set_ylabel('Entropy (bits)')
-        axes[0].set_title('Exploration-Exploitation Tradeoff')
-        axes[0].grid(True, alpha=0.3)
-        axes[0].text(0.05, 0.95, 'Small λ → High entropy\n(Exploration)', 
-                    transform=axes[0].transAxes, verticalalignment='top',
-                    bbox=dict(boxstyle='round', facecolor='lightblue', alpha=0.7))
-        axes[0].text(0.95, 0.05, 'Large λ → Low entropy\n(Exploitation)', 
-                    transform=axes[0].transAxes, verticalalignment='bottom', horizontalalignment='right',
-                    bbox=dict(boxstyle='round', facecolor='lightcoral', alpha=0.7))
-        
-        # ESS vs Lambda
-        axes[1].semilogx(df['lambda'], df['ess'], 's-', linewidth=2, markersize=8, color='orange')
-        axes[1].set_xlabel('Lambda (λ)')
-        axes[1].set_ylabel('Effective Sample Size')
-        axes[1].set_title('Sample Efficiency')
-        axes[1].grid(True, alpha=0.3)
-        
-        # Concentration vs Lambda
-        axes[2].semilogx(df['lambda'], df['concentration'], '^-', linewidth=2, markersize=8, color='green')
-        axes[2].set_xlabel('Lambda (λ)')
-        axes[2].set_ylabel('Top Path Concentration')
-        axes[2].set_title('Decision Sharpness')
-        axes[2].grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        plt.savefig("results/path_integral_demo_analysis.png", dpi=300, bbox_inches='tight')
-        plt.close()
-        
-        print("\n4. Files generated:")
-        print("   ✓ results/path_integral_demo.csv")
-        print("   ✓ results/path_integral_demo_analysis.png")
-        
-        print("\n=== DEMONSTRATION COMPLETE ===")
-        print("The framework successfully demonstrates:")
-        print("• Single λ parameter controls exploration-exploitation")
-        print("• Small λ → flat distribution (high entropy, exploration)")
-        print("• Large λ → concentrated distribution (low entropy, exploitation)")
-        print("• Numerical stability via log-sum-exp")
-        print("• ESS-based resampling when needed")
-        
-        return df
-
-    @staticmethod
-    def run_chess_position_analysis(fen=None):
-        """
-        Run path integral analysis on a real chess position.
-        
-        This demonstrates the framework applied to actual chess move sequences
-        with real policy probabilities and centipawn evaluations.
-        """
-        if fen is None:
-            fen = config.MULTI_FEN[0]  # Default to first test position
-            
-        print(f"\n=== CHESS POSITION ANALYSIS ===")
-        print(f"Position: {fen}")
-        
-        # Run comprehensive path integral analysis
-        results = Calc.path_integral_analysis(
-            fen=fen,
-            lambda_values=[0.01, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0],
-            samples=50,  # Reasonable for demonstration
-            depth=4,     # Moderate depth
-            save_results=True
-        )
-        
-        print("\n=== CHESS ANALYSIS COMPLETE ===")
-        return results    
         
     @staticmethod
     def batch_path_analysis(fen_list, lambda_values, samples=50, depth=5, use_cache=True):
@@ -2120,7 +1938,6 @@ class Calc:
                         
                         # Apply path integral framework
                         pi_result = Calc.path_integral_framework([], cp_rewards, lam)
-                        
                         result = {
                             'position_index': fen_idx,
                             'fen': fen,
