@@ -2067,8 +2067,9 @@ class Analyzer:
                 time_taken = engine_result.get('time', 0)
 
                 # Calculate performance metrics
-                efficiency = accuracy / max(time_taken, 0.001)  # Accuracy per second
-                quality_time_ratio = (accuracy * (1 - entropy/10)) / max(time_taken, 0.001)  # Quality-adjusted efficiency
+                safe_time = time_taken if time_taken and time_taken > 0 else 1e-6
+                efficiency = accuracy / safe_time  # Accuracy per second
+                quality_time_ratio = (accuracy * (1 - entropy/10)) / safe_time  # Quality-adjusted efficiency
 
                 perf_data[engine_key] = {
                     'accuracy': accuracy,
@@ -2095,7 +2096,8 @@ class Analyzer:
 
         # Normalize entropy for bubble size
         max_entropy = max(entropies) if entropies else 1
-        bubble_sizes = [100 + (e/max_entropy)*300 for e in entropies]
+        safe_max_entropy = max(max_entropy, 1e-6)
+        bubble_sizes = [100 + (e/safe_max_entropy)*300 for e in entropies]
 
         scatter = ax1.scatter(times, accuracies, s=bubble_sizes, c=colors, alpha=0.6, edgecolors='black')
         for i, engine in enumerate(engine_labels):
