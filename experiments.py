@@ -546,7 +546,7 @@ class Experiments:
                 else:
                     # Lc0 Player
                     lc0_start = time.time()
-                    lc0_opts = {"MultiPV": 1, "Temperature": 0.2, "Deterministic": False, "UseNoise": False}
+                    lc0_opts = {"MultiPV": 1, "Temperature": 0.2, "Deterministic": True, "UseNoise": False}
                     moves, scores, _ = Engine.lc0_top_moves_and_scores(board.fen(), depth=config.TARGET_DEPTH*100, multipv=1, options=lc0_opts)
                     lc0_end = time.time()
                     if moves and scores:

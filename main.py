@@ -638,6 +638,9 @@ def main():
         # İstatistiksel grafikler oluştur
         create_statistical_plots(statistical_validator)
 
+        # Sonuçları CSV olarak kaydet
+        statistical_validator.export_results_to_csv()
+
         # Generate comprehensive statistical report
         statistical_report = statistical_validator.generate_statistical_report()
         with open("results/comprehensive_statistical_report.txt", "w", encoding="utf-8") as f:

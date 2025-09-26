@@ -871,18 +871,20 @@ class Plots:
             story.append(Spacer(1, 8))
             return True
 
-        def add_image(path, caption=None, max_width_cm=16):
+        def add_image(path, caption=None, max_width_cm=16, max_height_cm=20):
             if not os.path.exists(path):
                 return False
             try:
                 img = Image(path)
                 max_w = max_width_cm * cm
-                # ölçülendirme
-                img.drawWidth = min(img.drawWidth, max_w)
-                if img.drawWidth < max_w:
-                    scale = max_w / float(img.drawWidth)
-                    img.drawWidth = max_w
-                    img.drawHeight = img.drawHeight * scale
+                max_h = max_height_cm * cm
+                # Orantılı ölçekleme
+                orig_w, orig_h = img.drawWidth, img.drawHeight
+                scale_w = max_w / float(orig_w)
+                scale_h = max_h / float(orig_h)
+                scale = min(scale_w, scale_h, 1.0)  # 1.0'dan büyükse küçültme yok
+                img.drawWidth = orig_w * scale
+                img.drawHeight = orig_h * scale
                 story.append(img)
                 if caption:
                     p(caption, "Small")

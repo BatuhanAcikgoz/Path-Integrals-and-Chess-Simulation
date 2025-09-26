@@ -56,7 +56,7 @@ SAMPLE_COUNT = 30   # Number of paths to sample per analysis
 # Engine analysis parameters
 LC0_NODES = 10000        # LC0 nodes budget for analysis
 TARGET_DEPTH = 5         # Standard analysis depth
-STOCKFISH_DEPTH = 30     # Stockfish analysis depth
+STOCKFISH_DEPTH = 20     # Stockfish analysis depth
 
 # Adaptive nodes system
 ADAPTIVE_NODES_ENABLED = True
@@ -65,7 +65,7 @@ MIN_NODES_PER_PLY = 100
 MAX_NODES_PER_PLY = 1000000
 
 # Path integral framework parameters
-LAMBDA = 0.2             # Default lambda for path integral framework
+LAMBDA = 0.18             # Default lambda for path integral framework
 MULTIPV = 5              # Number of top moves to analyze
 TOP_N = 5                # Top N moves for accuracy calculation
 
@@ -124,6 +124,6 @@ MODE = os.getenv("PI_MODE", "competitive")  # "competitive" or "quantum_limit"
 
 # Mode-specific parameters
 HIGH_MULTIPV = 20        # MultiPV for quantum limit mode
-HIGH_DEPTH = 20          # Depth for quantum limit mode
+HIGH_DEPTH = 10          # Depth for quantum limit mode
 COMPETITIVE_MULTIPV = 5  # MultiPV for competitive mode
-COMPETITIVE_DEPTH = 5    # Depth for competitive mode
+COMPETITIVE_DEPTH = 5      # Depth for competitive mode

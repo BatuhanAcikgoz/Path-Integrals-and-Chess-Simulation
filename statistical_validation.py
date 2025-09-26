@@ -421,13 +421,15 @@ class StatisticalValidator:
         # Trimmed mean (10% trimmed)
         trimmed_mean = stats.trim_mean(data, 0.1)
         
+        # NumPy array'e dönüştür
+        data_np = np.array(data, dtype=float).flatten()
         # Winsorized statistics
-        winsorized_data = stats.mstats.winsorize(data, limits=[0.05, 0.05])
+        winsorized_data = stats.mstats.winsorize(data_np, limits=(0.05, 0.05))
         winsorized_mean = np.mean(winsorized_data)
         winsorized_std = np.std(winsorized_data, ddof=1)
         
         # Outlier detection using IQR method
-        q1, q3 = np.percentile(data, [25, 75])
+        q1, q3 = np.percentile(data_np, [25, 75])
         iqr_val = q3 - q1
         lower_bound = q1 - 1.5 * iqr_val
         upper_bound = q3 + 1.5 * iqr_val
@@ -595,6 +597,54 @@ class StatisticalValidator:
             effect_size = "large"
         
         return f"Significant group differences with {effect_size} effect size"
+
+    def log_dataset_info(self, dataset_name: str, data: list, params: dict = None):
+        """Kullanılan veri seti ve parametreleri logla"""
+        info = {
+            'dataset_name': dataset_name,
+            'n': len(data),
+            'mean': float(np.mean(data)) if len(data) > 0 else None,
+            'std': float(np.std(data)) if len(data) > 0 else None,
+            'params': params if params else {}
+        }
+        self.results_log.append({'dataset_info': info})
+        print(f"[DATASET] {dataset_name} | n={info['n']} | mean={info['mean']:.4f} | std={info['std']:.4f} | params={info['params']}")
+
+    def export_results_to_csv(self, csv_path: str = "results/statistical_test_results.csv"):
+        """Tüm test sonuçlarını ve veri seti özetini CSV olarak kaydet"""
+        import pandas as pd
+        rows = []
+        for r in self.results_log:
+            if 'test_name' in r:
+                row = {
+                    'test_name': r.get('test_name', ''),
+                    'dataset_name': r.get('dataset_info', {}).get('dataset_name', ''),
+                    'n': r.get('dataset_info', {}).get('n', ''),
+                    'params': r.get('dataset_info', {}).get('params', ''),
+                    'p_value': r.get('p_value', ''),
+                    'effect_size': r.get('effect_size', ''),
+                    'ci_lower': r.get('ci_lower', ''),
+                    'ci_upper': r.get('ci_upper', ''),
+                    'interpretation': r.get('interpretation', '')
+                }
+                rows.append(row)
+            elif 'dataset_info' in r:
+                # Sadece veri seti özetini ekle
+                row = {
+                    'test_name': 'DATASET_INFO',
+                    'dataset_name': r['dataset_info'].get('dataset_name', ''),
+                    'n': r['dataset_info'].get('n', ''),
+                    'params': r['dataset_info'].get('params', ''),
+                    'p_value': '',
+                    'effect_size': '',
+                    'ci_lower': '',
+                    'ci_upper': '',
+                    'interpretation': ''
+                }
+                rows.append(row)
+        df = pd.DataFrame(rows)
+        df.to_csv(csv_path, index=False, encoding="utf-8")
+        print(f"[CSV] Tüm analiz sonuçları ve veri seti özetleri kaydedildi: {csv_path}")
 
 def create_statistical_plots(validator: StatisticalValidator, save_dir: str = "results"):
     """

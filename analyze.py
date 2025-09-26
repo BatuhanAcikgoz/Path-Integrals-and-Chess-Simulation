@@ -19,6 +19,21 @@ from mathfuncs import Calc
 from plots import Plots
 
 
+# --- Pozisyon isimleri ve FEN eşleşmesi sabitleri ---
+POSITION_NAMES = [
+    "Italian_Game",
+    "Sicilian_Defense",
+    "Ruy_Lopez",
+    "Strategic_Midgame_Isolated_Pawn",
+    "Calm_Strategic_Midgame",
+    "Tactical_Midgame",
+    "King_Pawn_Endgame"
+]
+FEN_TO_ANALYZE = dict(zip(POSITION_NAMES, config.MULTI_FEN))
+# FEN'den pozisyon ismine ulaşmak için ters mapping
+FEN_NAME_MAP = {v: k for k, v in FEN_TO_ANALYZE.items()}
+
+
 class Analyzer:
     @staticmethod
     def analyze_sample_size_sensitivity(fen, sample_sizes=None):
@@ -472,8 +487,7 @@ class Analyzer:
             plt.tight_layout()
             os.makedirs('results', exist_ok=True)
             img_path = os.path.join('results', 'feynman_analogy_validation.png')
-            if save_results:
-                plt.savefig(img_path, dpi=300)
+            plt.savefig(img_path, dpi=300)
             plt.close()
 
             # Save CSV summary
@@ -1784,12 +1798,15 @@ class Analyzer:
                     lc0_top_move = str(lc0_moves[0])
                     lc0_probs_arr = np.asarray(lc0_probs)
                     lc0_accuracy = float(np.max(lc0_probs_arr)) if lc0_probs_arr.size > 0 else 0.0
+                    # Tüm hamlelerin olasılıklarını dict olarak ekle
+                    lc0_move_distribution = {str(move): float(prob) for move, prob in zip(lc0_moves, lc0_probs)}
                     results['lc0_standalone'] = {
                         'top_move': lc0_top_move,
                         'accuracy': lc0_accuracy,
                         'time': lc0_time,
                         'engine_time': lc0_analysis_time,
                         'score': lc0_scores[0] if lc0_scores else None,
+                        'move_distribution': lc0_move_distribution,
                         'status': 'success'
                     }
                     print(f"   Top move: {lc0_top_move}, Accuracy: {lc0_accuracy:.3f}, Time: {lc0_time:.2f}s")
@@ -1808,7 +1825,7 @@ class Analyzer:
         # 3. Stockfish Analysis
         print("\n3. Stockfish Analysis...")
         try:
-            stockfish_result = Engine.get_stockfish_analysis(fen, config.STOCKFISH_DEPTH, config.LC0_MULTIPV)
+            stockfish_result = Engine.get_stockfish_analysis(fen, config.STOCKFISH_DEPTH, 1)
             stockfish_scores = stockfish_result.get('scores', [])
             if stockfish_scores:
                 sf_probs = Calc.normalize_scores_to_probs(stockfish_scores, 1.0)
@@ -1833,7 +1850,7 @@ class Analyzer:
                 'error': str(e)
             }
 
-        # Optional: save comparison bar charts (entropy and accuracy) for the four entries
+        # Advanced analysis: Engine decision consistency and move overlap
         if save_results:
             try:
                 import matplotlib
@@ -1842,50 +1859,317 @@ class Analyzer:
                 import re, hashlib
                 os.makedirs('results', exist_ok=True)
 
-                keys = ['path_integral', 'path_integral_quantum', 'lc0_standalone', 'stockfish']
-                labels = []
-                ent_vals = []
-                acc_vals = []
-                for k in keys:
-                    v = results.get(k, {})
-                    mode_label = v.get('mode', k) if isinstance(v, dict) else k
-                    labels.append(mode_label)
-                    ent_vals.append(float(v.get('entropy', np.nan)) if isinstance(v, dict) else np.nan)
-                    acc_vals.append(float(v.get('accuracy', np.nan)) if isinstance(v, dict) else np.nan)
-
-                x = np.arange(len(labels))
-                width = 0.5
-
-                plt.figure(figsize=(10, 4))
-                plt.bar(x, ent_vals, width, color=['deepskyblue', 'orange', 'green', 'gray'], edgecolor='black')
-                plt.xticks(x, labels, rotation=45, ha='right')
-                plt.ylabel('Entropy (bits)')
-                plt.title('Three-way comparison: Entropy (PI competitive / PI quantum / Lc0 / Stockfish)')
-                plt.tight_layout()
-                # create filesystem-safe, concise, unique filename per FEN to avoid overwrites
-                fen_slug = re.sub(r'[^A-Za-z0-9]', '_', fen)
-                fen_short = fen_slug[:20]
-                fen_hash = hashlib.md5(fen.encode('utf-8')).hexdigest()[:8]
-                ent_path = os.path.join('results', f'three_way_entropy_compare_{fen_short}_{fen_hash}.png')
-                plt.savefig(ent_path, dpi=300)
-                plt.close()
-
-                plt.figure(figsize=(10, 4))
-                plt.bar(x, acc_vals, width, color=['deepskyblue', 'orange', 'green', 'gray'], edgecolor='black')
-                plt.xticks(x, labels, rotation=45, ha='right')
-                plt.ylabel('Concentration (mode probability)')
-                plt.ylim(0, 1.0)
-                plt.title('Three-way comparison: Accuracy / Concentration')
-                plt.tight_layout()
-                acc_path = os.path.join('results', f'three_way_accuracy_compare_{fen_short}_{fen_hash}.png')
-                plt.savefig(acc_path, dpi=300)
-                plt.close()
-
-                print(f"Saved comparison plots: {ent_path}, {acc_path}")
+                # 1. Move Overlap Analysis - Venn diagram style analysis
+                Analyzer._generate_move_overlap_analysis(results, fen)
+                
+                # 2. Decision Confidence Analysis
+                Analyzer._generate_decision_confidence_analysis(results, fen)
+                
+                # 3. Time-Performance Trade-off Analysis
+                Analyzer._generate_time_performance_analysis(results, fen)
+                
+                print("✓ Advanced engine comparison analyses completed")
             except Exception as e:
-                print(f"Warning: could not save comparison plots: {e}")
+                print(f"Warning: could not save advanced comparison analyses: {e}")
 
         return results
+
+    @staticmethod
+    def _generate_move_overlap_analysis(results, fen):
+        """Analyze move overlap and agreement between different engines/modes."""
+        import matplotlib.pyplot as plt
+        import re, hashlib
+        
+        # Extract top moves from each engine
+        moves_data = {}
+        for engine_key, engine_result in results.items():
+            if isinstance(engine_result, dict) and engine_result.get('status') == 'success':
+                top_move = engine_result.get('top_move')
+                move_dist = engine_result.get('move_distribution', {})
+                if top_move and top_move != 'error':
+                    moves_data[engine_key] = {
+                        'top_move': top_move,
+                        'distribution': move_dist
+                    }
+        
+        if len(moves_data) < 2:
+            return
+        
+        # Create move overlap matrix
+        engine_names = list(moves_data.keys())
+        n_engines = len(engine_names)
+        overlap_matrix = np.zeros((n_engines, n_engines))
+        
+        for i, engine1 in enumerate(engine_names):
+            for j, engine2 in enumerate(engine_names):
+                if i == j:
+                    overlap_matrix[i, j] = 1.0
+                else:
+                    # Calculate weighted overlap using probability distributions
+                    # NOTE: a set-based Jaccard on the keys becomes binary (0/1)
+                    # when distributions are one-hot (only the top move present). To
+                    # provide a smoother continuous measure use weighted Jaccard =
+                    # sum_min(p_i, q_i) over the union of moves (both normalized).
+                    dist1 = moves_data[engine1]['distribution'] or {}
+                    dist2 = moves_data[engine2]['distribution'] or {}
+                    moves_union = set(dist1.keys()).union(set(dist2.keys()))
+                    if moves_union:
+                        # Build aligned probability vectors and normalize to sum=1
+                        p = np.array([float(dist1.get(m, 0.0)) for m in moves_union], dtype=float)
+                        q = np.array([float(dist2.get(m, 0.0)) for m in moves_union], dtype=float)
+                        # small-safety normalization
+                        if p.sum() > 0:
+                            p = p / p.sum()
+                        if q.sum() > 0:
+                            q = q / q.sum()
+                        # weighted Jaccard (range 0..1)
+                        overlap_matrix[i, j] = float(np.minimum(p, q).sum())
+                    else:
+                        overlap_matrix[i, j] = 0.0
+
+        # Visualize overlap matrix
+        plt.figure(figsize=(10, 8))
+        im = plt.imshow(overlap_matrix, cmap='RdYlBu_r', vmin=0, vmax=1)
+        plt.colorbar(im, label='Move Overlap (Jaccard Similarity)')
+        
+        # Add text annotations
+        for i in range(n_engines):
+            for j in range(n_engines):
+                text = plt.text(j, i, f'{overlap_matrix[i, j]:.2f}',
+                               ha="center", va="center", color="black", fontweight='bold')
+        
+        plt.xticks(range(n_engines), [name.replace('_', ' ').title() for name in engine_names], rotation=45)
+        plt.yticks(range(n_engines), [name.replace('_', ' ').title() for name in engine_names])
+        plt.title('Engine Move Overlap Analysis\n(Higher values = more similar move preferences)')
+        plt.tight_layout()
+        
+        # Save with unique filename
+        import hashlib, re
+        fen_slug = re.sub(r'[^A-Za-z0-9]', '_', fen)
+        fen_short = fen_slug[:20]
+        # FEN kodundan pozisyon ismini al
+        position_name = FEN_NAME_MAP.get(fen, fen_short)
+        overlap_path = f'results/engine_move_overlap_{position_name}.png'
+        plt.savefig(overlap_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        print(f"   📊 Move overlap analysis saved: {overlap_path}")
+
+    @staticmethod
+    def _generate_decision_confidence_analysis(results, fen):
+        """Analyze decision confidence and uncertainty across engines."""
+        import matplotlib.pyplot as plt
+        import re, hashlib
+        
+        # Extract confidence metrics
+        confidence_data = {}
+        for engine_key, engine_result in results.items():
+            if isinstance(engine_result, dict) and engine_result.get('status') == 'success':
+                accuracy = engine_result.get('accuracy', 0)
+                entropy = engine_result.get('entropy', 0)
+                time_taken = engine_result.get('time', 0)
+                
+                # Calculate confidence score (high accuracy, low entropy = high confidence)
+                if entropy > 0:
+                    confidence_score = accuracy / (1 + entropy)  # Normalized confidence
+                else:
+                    confidence_score = accuracy
+                
+                confidence_data[engine_key] = {
+                    'accuracy': accuracy,
+                    'entropy': entropy,
+                    'confidence': confidence_score,
+                    'time': time_taken,
+                    'uncertainty': entropy  # Higher entropy = higher uncertainty
+                }
+        
+        if len(confidence_data) < 2:
+            return
+        
+        # Create confidence comparison plot
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
+        
+        engines = list(confidence_data.keys())
+        engine_labels = [name.replace('_', ' ').title() for name in engines]
+        
+        # 1. Confidence vs Uncertainty scatter
+        confidences = [confidence_data[e]['confidence'] for e in engines]
+        uncertainties = [confidence_data[e]['uncertainty'] for e in engines]
+        colors = ['deepskyblue', 'orange', 'green', 'red'][:len(engines)]
+        
+        ax1.scatter(uncertainties, confidences, c=colors, s=100, alpha=0.8, edgecolors='black')
+        for i, engine in enumerate(engine_labels):
+            ax1.annotate(engine, (uncertainties[i], confidences[i]), 
+                        xytext=(5, 5), textcoords='offset points', fontsize=10)
+        ax1.set_xlabel('Uncertainty (Entropy)')
+        ax1.set_ylabel('Decision Confidence')
+        ax1.set_title('Confidence vs Uncertainty Trade-off')
+        ax1.grid(True, alpha=0.3)
+        
+        # 2. Accuracy comparison
+        accuracies = [confidence_data[e]['accuracy'] for e in engines]
+        bars1 = ax2.bar(engine_labels, accuracies, color=colors, alpha=0.8, edgecolor='black')
+        ax2.set_ylabel('Accuracy (Concentration)')
+        ax2.set_title('Decision Accuracy Comparison')
+        ax2.set_ylim(0, 1)
+        ax2.grid(True, alpha=0.3, axis='y')
+        
+        # Add value labels on bars
+        for bar, acc in zip(bars1, accuracies):
+            ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
+                    f'{acc:.3f}', ha='center', va='bottom', fontweight='bold')
+        
+        # 3. Time efficiency
+        times = [confidence_data[e]['time'] for e in engines]
+        bars2 = ax3.bar(engine_labels, times, color=colors, alpha=0.8, edgecolor='black')
+        ax3.set_ylabel('Analysis Time (seconds)')
+        ax3.set_title('Computational Efficiency')
+        ax3.grid(True, alpha=0.3, axis='y')
+        
+        # Add value labels on bars
+        for bar, time_val in zip(bars2, times):
+            ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(times)*0.01,
+                    f'{time_val:.2f}s', ha='center', va='bottom', fontweight='bold')
+        
+        # 4. Efficiency vs Quality scatter (time vs confidence)
+        ax4.scatter(times, confidences, c=colors, s=100, alpha=0.8, edgecolors='black')
+        for i, engine in enumerate(engine_labels):
+            ax4.annotate(engine, (times[i], confidences[i]), 
+                        xytext=(5, 5), textcoords='offset points', fontsize=10)
+        ax4.set_xlabel('Analysis Time (seconds)')
+        ax4.set_ylabel('Decision Confidence')
+        ax4.set_title('Efficiency vs Quality Trade-off')
+        ax4.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        # Save with unique filename
+        fen_slug = re.sub(r'[^A-Za-z0-9]', '_', fen)
+        fen_short = fen_slug[:20]
+        position_name = FEN_NAME_MAP.get(fen, fen_short)
+        confidence_path = f'results/engine_decision_confidence_{position_name}.png'
+        plt.savefig(confidence_path, dpi=300, bbox_inches='tight')
+        plt.close()
+
+        print(f"   📊 Decision confidence analysis saved: {confidence_path}")
+
+    @staticmethod
+    def _generate_time_performance_analysis(results, fen):
+        """Analyze time vs performance trade-offs with detailed metrics."""
+        import matplotlib.pyplot as plt
+        import re, hashlib
+
+        # Extract performance metrics
+        perf_data = {}
+        for engine_key, engine_result in results.items():
+            if isinstance(engine_result, dict) and engine_result.get('status') == 'success':
+                accuracy = engine_result.get('accuracy', 0)
+                entropy = engine_result.get('entropy', 0)
+                time_taken = engine_result.get('time', 0)
+
+                # Calculate performance metrics
+                efficiency = accuracy / max(time_taken, 0.001)  # Accuracy per second
+                quality_time_ratio = (accuracy * (1 - entropy/10)) / max(time_taken, 0.001)  # Quality-adjusted efficiency
+
+                perf_data[engine_key] = {
+                    'accuracy': accuracy,
+                    'entropy': entropy,
+                    'time': time_taken,
+                    'efficiency': efficiency,
+                    'quality_time_ratio': quality_time_ratio
+                }
+
+        if len(perf_data) < 2:
+            return
+
+        # Create performance analysis plot
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
+
+        engines = list(perf_data.keys())
+        engine_labels = [name.replace('_', ' ').title() for name in engines]
+        colors = ['deepskyblue', 'orange', 'green', 'red'][:len(engines)]
+
+        # 1. Time vs Accuracy scatter with size = entropy
+        times = [perf_data[e]['time'] for e in engines]
+        accuracies = [perf_data[e]['accuracy'] for e in engines]
+        entropies = [perf_data[e]['entropy'] for e in engines]
+
+        # Normalize entropy for bubble size
+        max_entropy = max(entropies) if entropies else 1
+        bubble_sizes = [100 + (e/max_entropy)*300 for e in entropies]
+
+        scatter = ax1.scatter(times, accuracies, s=bubble_sizes, c=colors, alpha=0.6, edgecolors='black')
+        for i, engine in enumerate(engine_labels):
+            ax1.annotate(engine, (times[i], accuracies[i]),
+                        xytext=(5, 5), textcoords='offset points', fontsize=9)
+        ax1.set_xlabel('Analysis Time (seconds)')
+        ax1.set_ylabel('Accuracy (Concentration)')
+        ax1.set_title('Time vs Accuracy\n(Bubble size = Entropy)')
+        ax1.grid(True, alpha=0.3)
+
+        # 2. Efficiency comparison (accuracy/time)
+        efficiencies = [perf_data[e]['efficiency'] for e in engines]
+        bars1 = ax2.bar(engine_labels, efficiencies, color=colors, alpha=0.8, edgecolor='black')
+        ax2.set_ylabel('Efficiency (Accuracy/Time)')
+        ax2.set_title('Computational Efficiency Comparison')
+        ax2.grid(True, alpha=0.3, axis='y')
+
+        # Add value labels
+        for bar, eff in zip(bars1, efficiencies):
+            ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(efficiencies)*0.01,
+                    f'{eff:.2f}', ha='center', va='bottom', fontweight='bold')
+
+        # 3. Quality-adjusted efficiency
+        quality_ratios = [perf_data[e]['quality_time_ratio'] for e in engines]
+        bars2 = ax3.bar(engine_labels, quality_ratios, color=colors, alpha=0.8, edgecolor='black')
+        ax3.set_ylabel('Quality-Adjusted Efficiency')
+        ax3.set_title('Quality-Time Trade-off\n(Higher = Better quality per time)')
+        ax3.grid(True, alpha=0.3, axis='y')
+
+        # Add value labels
+        for bar, qr in zip(bars2, quality_ratios):
+            ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(quality_ratios)*0.01,
+                    f'{qr:.2f}', ha='center', va='bottom', fontweight='bold')
+
+        # 4. Performance radar chart
+        ax4 = plt.subplot(2, 2, 4, projection='polar')
+
+        # Normalize metrics for radar chart
+        metrics = ['accuracy', 'efficiency', 'quality_time_ratio']
+        angles = np.linspace(0, 2 * np.pi, len(metrics), endpoint=False).tolist()
+        angles += angles[:1]  # Complete the circle
+
+        for i, engine in enumerate(engines):
+            values = []
+            for metric in metrics:
+                val = perf_data[engine][metric]
+                # Normalize to 0-1 scale
+                all_vals = [perf_data[e][metric] for e in engines]
+                max_val = max(all_vals) if all_vals else 1
+                normalized_val = val / max_val if max_val > 0 else 0
+                values.append(normalized_val)
+
+            values += values[:1]  # Complete the circle
+
+            ax4.plot(angles, values, 'o-', linewidth=2, label=engine_labels[i], color=colors[i])
+            ax4.fill(angles, values, alpha=0.25, color=colors[i])
+
+        ax4.set_xticks(angles[:-1])
+        ax4.set_xticklabels(['Accuracy', 'Efficiency', 'Quality/Time'])
+        ax4.set_ylim(0, 1)
+        ax4.set_title('Performance Radar Chart\n(Normalized Metrics)')
+        ax4.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0))
+
+        plt.tight_layout()
+
+        # Save with unique filename
+        fen_slug = re.sub(r'[^A-Za-z0-9]', '_', fen)
+        fen_short = fen_slug[:20]
+        position_name = FEN_NAME_MAP.get(fen, fen_short)
+        perf_path = f'results/engine_time_performance_{position_name}.png'
+        plt.savefig(perf_path, dpi=300, bbox_inches='tight')
+        plt.close()
+
+        print(f"   📊 Time-performance analysis saved: {perf_path}")
     @staticmethod
     def chess960_position_study(chess960_fens, position_names=None):
         """
@@ -1978,8 +2262,312 @@ class Analyzer:
         conv_df = pd.DataFrame(convergence_results)
         conv_df.to_csv("results/convergence_study.csv", index=False)
         
-        return {
+        return ({
             'convergence_data': conv_df,
             'depth_range': depth_range,
             'sample_range': sample_range
-        }
+        })
+
+    @staticmethod
+    def strategic_depth_analysis(fen, depth_range=None, save_results=True):
+        """
+        Analyze how strategic understanding changes with search depth.
+        This provides insights into the 'strategic depth' of different engines.
+        """
+        if depth_range is None:
+            depth_range = [4, 8, 12, 16, 20, 24]
+        
+        print(f"\n=== Strategic Depth Analysis ===")
+        print(f"Depth range: {depth_range}")
+        
+        results = []
+        
+        for depth in tqdm(depth_range, desc="Strategic depth analysis"):
+            # PI Competitive analysis at different depths
+            pi_paths = Engine.sample_paths(fen, depth, config.LAMBDA, config.SAMPLE_COUNT, mode='competitive')
+            pi_entropy, pi_counter = Calc.compute_entropy(pi_paths)
+            pi_accuracy = Calc.top_move_concentration(pi_paths)
+            pi_top_move = Calc.most_frequent_first_move(pi_paths)
+            
+            # LC0 analysis at different depths
+            try:
+                lc0_moves, lc0_scores, lc0_time = Engine.lc0_top_moves_and_scores(
+                    fen, depth=depth, multipv=config.MULTIPV
+                )
+                lc0_top_move = str(lc0_moves[0]) if lc0_moves else None
+                lc0_probs = Calc.normalize_scores_to_probs(lc0_scores, config.LAMBDA)
+                lc0_entropy = -sum([p * np.log2(p) for p in lc0_probs if p > 0]) if lc0_probs else 0.0
+                lc0_accuracy = max(lc0_probs) if lc0_probs else 0.0
+            except:
+                lc0_top_move = None
+                lc0_entropy = 0.0
+                lc0_accuracy = 0.0
+            
+            # Calculate move stability (how often the top move changes)
+            move_agreement = 1.0 if pi_top_move == lc0_top_move else 0.0
+            
+            results.append({
+                'depth': depth,
+                'pi_entropy': pi_entropy,
+                'pi_accuracy': pi_accuracy,
+                'pi_top_move': pi_top_move,
+                'lc0_entropy': lc0_entropy,
+                'lc0_accuracy': lc0_accuracy,
+                'lc0_top_move': lc0_top_move,
+                'move_agreement': move_agreement,
+                'entropy_difference': abs(pi_entropy - lc0_entropy),
+                'accuracy_difference': abs(pi_accuracy - lc0_accuracy)
+            })
+        
+        df = pd.DataFrame(results)
+        
+        if save_results:
+            df.to_csv('results/strategic_depth_analysis.csv', index=False)
+            
+            # Generate strategic depth plots
+            Analyzer._generate_strategic_depth_plots(df, fen)
+        
+        return df
+
+    @staticmethod
+    def _generate_strategic_depth_plots(df, fen):
+        """Generate strategic depth analysis visualizations."""
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
+        
+        depths = df['depth'].tolist()
+        
+        # 1. Entropy convergence with depth
+        ax1.plot(depths, df['pi_entropy'], 'o-', label='PI Competitive', linewidth=2, markersize=8)
+        ax1.plot(depths, df['lc0_entropy'], 's-', label='LC0', linewidth=2, markersize=8)
+        ax1.set_xlabel('Search Depth')
+        ax1.set_ylabel('Entropy (bits)')
+        ax1.set_title('Strategic Entropy vs Search Depth')
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+
+        # 2. Accuracy convergence with depth
+        ax2.plot(depths, df['pi_accuracy'], 'o-', label='PI Competitive', linewidth=2, markersize=8)
+        ax2.plot(depths, df['lc0_accuracy'], 's-', label='LC0', linewidth=2, markersize=8)
+        ax2.set_xlabel('Search Depth')
+        ax2.set_ylabel('Accuracy (Concentration)')
+        ax2.set_title('Decision Confidence vs Search Depth')
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+
+        # 3. Move agreement over depth
+        ax3.plot(depths, df['move_agreement'], 'o-', color='purple', linewidth=2, markersize=8)
+        ax3.set_xlabel('Search Depth')
+        ax3.set_ylabel('Move Agreement (PI vs LC0)')
+        ax3.set_title('Strategic Agreement vs Search Depth')
+        ax3.set_ylim(-0.1, 1.1)
+        ax3.grid(True, alpha=0.3)
+
+        # 4. Entropy difference (strategic divergence)
+        ax4.plot(depths, df['entropy_difference'], 'o-', color='red', linewidth=2, markersize=8)
+        ax4.set_xlabel('Search Depth')
+        ax4.set_ylabel('Entropy Difference |PI - LC0|')
+        ax4.set_title('Strategic Divergence vs Search Depth')
+        ax4.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+
+        # Save with unique filename
+        import re, hashlib
+        fen_slug = re.sub(r'[^A-Za-z0-9]', '_', fen)
+        fen_short = fen_slug[:20]
+        fen_hash = hashlib.md5(fen.encode('utf-8')).hexdigest()[:8]
+        depth_path = f'results/strategic_depth_analysis_{fen_short}_{fen_hash}.png'
+        plt.savefig(depth_path, dpi=300, bbox_inches='tight')
+        plt.close()
+
+        print(f"   📊 Strategic depth analysis saved: {depth_path}")
+
+    @staticmethod
+    def move_quality_assessment(fen, candidate_moves=None, save_results=True):
+        """
+        Assess the quality of different candidate moves using multiple evaluation methods.
+        This provides insights into move evaluation consistency across different approaches.
+        """
+        print(f"\n=== Move Quality Assessment ===")
+        
+        # Get candidate moves from LC0 if not provided
+        if candidate_moves is None:
+            try:
+                lc0_moves, lc0_scores, _ = Engine.lc0_top_moves_and_scores(
+                    fen, depth=config.TARGET_DEPTH, multipv=min(8, config.MULTIPV)
+                )
+                candidate_moves = [str(move) for move in lc0_moves[:6]]  # Top 6 moves
+            except:
+                # Fallback to legal moves
+                board = chess.Board(fen)
+                legal_moves = list(board.legal_moves)
+                candidate_moves = [str(move) for move in legal_moves[:6]]
+        
+        if not candidate_moves:
+            print("No candidate moves available for assessment")
+            return None
+        
+        print(f"Assessing {len(candidate_moves)} candidate moves: {candidate_moves}")
+        
+        assessment_results = []
+        
+        for move in tqdm(candidate_moves, desc="Assessing moves"):
+            # Create position after the move
+            board = chess.Board(fen)
+            try:
+                chess_move = chess.Move.from_uci(move)
+                if chess_move not in board.legal_moves:
+                    continue
+                board.push(chess_move)
+                new_fen = board.fen()
+            except:
+                continue
+            
+            # Evaluate position after move with different methods
+            
+            # 1. PI Competitive evaluation
+            try:
+                pi_paths = Engine.sample_paths(new_fen, config.TARGET_DEPTH, config.LAMBDA, 
+                                             config.SAMPLE_COUNT//2, mode='competitive')
+                pi_entropy, _ = Calc.compute_entropy(pi_paths)
+                pi_accuracy = Calc.top_move_concentration(pi_paths)
+            except:
+                pi_entropy, pi_accuracy = 0.0, 0.0
+            
+            # 2. PI Quantum evaluation
+            try:
+                pi_quantum_paths = Engine.sample_paths(new_fen, config.HIGH_DEPTH, config.LAMBDA, 
+                                                     config.SAMPLE_COUNT//2, mode='quantum_limit')
+                pi_quantum_entropy, _ = Calc.compute_entropy(pi_quantum_paths)
+                pi_quantum_accuracy = Calc.top_move_concentration(pi_quantum_paths)
+            except:
+                pi_quantum_entropy, pi_quantum_accuracy = 0.0, 0.0
+            
+            # 3. LC0 evaluation
+            try:
+                lc0_moves_after, lc0_scores_after, _ = Engine.lc0_top_moves_and_scores(
+                    new_fen, depth=config.TARGET_DEPTH, multipv=1
+                )
+                lc0_eval = lc0_scores_after[0] if lc0_scores_after else 0
+            except:
+                lc0_eval = 0
+            
+            # 4. Stockfish evaluation
+            try:
+                sf_result = Engine.get_stockfish_analysis(new_fen, config.STOCKFISH_DEPTH, 1)
+                sf_eval = sf_result.get('scores', [0])[0]
+            except:
+                sf_eval = 0
+            
+            # Calculate position complexity after move
+            legal_moves_after = len(list(board.legal_moves))
+            pieces_after = len(board.piece_map())
+            complexity_after = legal_moves_after * pieces_after
+            
+            # Calculate move quality metrics
+            # Higher entropy = more complex/interesting position
+            # Lower entropy = more forcing/simplified position
+            strategic_complexity = (pi_entropy + pi_quantum_entropy) / 2
+            tactical_sharpness = abs(sf_eval) / 100.0  # Normalize centipawn evaluation
+            
+            assessment_results.append({
+                'move': move,
+                'pi_entropy': pi_entropy,
+                'pi_accuracy': pi_accuracy,
+                'pi_quantum_entropy': pi_quantum_entropy,
+                'pi_quantum_accuracy': pi_quantum_accuracy,
+                'lc0_evaluation': lc0_eval,
+                'stockfish_evaluation': sf_eval,
+                'complexity_after': complexity_after,
+                'legal_moves_after': legal_moves_after,
+                'strategic_complexity': strategic_complexity,
+                'tactical_sharpness': tactical_sharpness,
+                'position_fen_after': new_fen
+            })
+        
+        df = pd.DataFrame(assessment_results)
+        
+        if save_results and not df.empty:
+            df.to_csv('results/move_quality_assessment.csv', index=False)
+            
+            # Generate move quality plots
+            Analyzer._generate_move_quality_plots(df, fen)
+        
+        return df
+
+    @staticmethod
+    def _generate_move_quality_plots(df, fen):
+        """Generate move quality assessment visualizations."""
+        if df.empty:
+            return
+        
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
+        
+        moves = df['move'].tolist()
+        colors = plt.cm.Set3(np.linspace(0, 1, len(moves)))
+        
+        # 1. Strategic complexity vs tactical sharpness
+        ax1.scatter(df['strategic_complexity'], df['tactical_sharpness'], 
+                   c=colors, s=100, alpha=0.8, edgecolors='black')
+        for i, move in enumerate(moves):
+            ax1.annotate(move, (df.iloc[i]['strategic_complexity'], df.iloc[i]['tactical_sharpness']), 
+                        xytext=(5, 5), textcoords='offset points', fontsize=10)
+        ax1.set_xlabel('Strategic Complexity (Average Entropy)')
+        ax1.set_ylabel('Tactical Sharpness (|Stockfish Eval|/100)')
+        ax1.set_title('Move Character Analysis')
+        ax1.grid(True, alpha=0.3)
+        
+        # 2. Engine evaluation comparison
+        x = np.arange(len(moves))
+        width = 0.35
+        
+        # Normalize evaluations for comparison
+        lc0_evals_norm = (df['lc0_evaluation'] - df['lc0_evaluation'].min()) / (df['lc0_evaluation'].max() - df['lc0_evaluation'].min() + 1e-6)
+        sf_evals_norm = (df['stockfish_evaluation'] - df['stockfish_evaluation'].min()) / (df['stockfish_evaluation'].max() - df['stockfish_evaluation'].min() + 1e-6)
+        
+        ax2.bar(x - width/2, lc0_evals_norm, width, label='LC0 (normalized)', alpha=0.8)
+        ax2.bar(x + width/2, sf_evals_norm, width, label='Stockfish (normalized)', alpha=0.8)
+        ax2.set_xlabel('Candidate Moves')
+        ax2.set_ylabel('Normalized Evaluation')
+        ax2.set_title('Engine Evaluation Comparison')
+        ax2.set_xticks(x)
+        ax2.set_xticklabels(moves, rotation=45)
+        ax2.legend()
+        ax2.grid(True, alpha=0.3, axis='y')
+        
+        # 3. PI mode comparison (entropy)
+        ax3.bar(x - width/2, df['pi_entropy'], width, label='PI Competitive', alpha=0.8)
+        ax3.bar(x + width/2, df['pi_quantum_entropy'], width, label='PI Quantum', alpha=0.8)
+        ax3.set_xlabel('Candidate Moves')
+        ax3.set_ylabel('Entropy (bits)')
+        ax3.set_title('PI Mode Entropy Comparison')
+        ax3.set_xticks(x)
+        ax3.set_xticklabels(moves, rotation=45)
+        ax3.legend()
+        ax3.grid(True, alpha=0.3, axis='y')
+        
+        # 4. Position complexity after moves
+        bars = ax4.bar(moves, df['complexity_after'], color=colors, alpha=0.8, edgecolor='black')
+        ax4.set_xlabel('Candidate Moves')
+        ax4.set_ylabel('Position Complexity (Legal Moves × Pieces)')
+        ax4.set_title('Resulting Position Complexity')
+        ax4.tick_params(axis='x', rotation=45)
+        ax4.grid(True, alpha=0.3, axis='y')
+        
+        # Add value labels on bars
+        for bar, complexity in zip(bars, df['complexity_after']):
+            ax4.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(df['complexity_after'])*0.01,
+                    f'{complexity:.0f}', ha='center', va='bottom', fontsize=9)
+        
+        plt.tight_layout()
+        
+        # Save with unique filename
+        import re, hashlib
+        fen_slug = re.sub(r'[^A-Za-z0-9]', '_', fen)
+        fen_short = fen_slug[:20]
+        fen_hash = hashlib.md5(fen.encode('utf-8')).hexdigest()[:8]
+        quality_path = f'results/move_quality_assessment_{fen_short}_{fen_hash}.png'
+        plt.savefig(quality_path, dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"   📊 Move quality assessment saved: {quality_path}")
