@@ -785,8 +785,8 @@ class Plots:
             leftMargin=1.8*cm, rightMargin=1.8*cm, topMargin=1.6*cm, bottomMargin=1.6*cm
         )
         styles = getSampleStyleSheet()
-        styles.add(ParagraphStyle(name="Section", fontSize=14, leading=18, spaceBefore=10, spaceAfter=6, textColor=colors.darkblue))
-        styles.add(ParagraphStyle(name="Small", fontSize=9, leading=12, textColor=colors.grey))
+        styles.add(ParagraphStyle(name="Section", fontSize=14, leading=18, spaceBefore=10, spaceAfter=6, textColor=colors.darkblue, fontName=DEFAULT_FONT))
+        styles.add(ParagraphStyle(name="Small", fontSize=9, leading=12, textColor=colors.grey, fontName=DEFAULT_FONT))
         styles.add(ParagraphStyle(name="Mono", fontName="Courier", fontSize=8, leading=10, textColor=colors.black))
         story = []
 
@@ -859,7 +859,7 @@ class Plots:
             data = [list(map(str, view.columns))] + [[("" if pd.isna(x) else str(x)) for x in row] for row in view.values.tolist()]
             tbl = Table(data, hAlign="LEFT")
             tbl.setStyle(TableStyle([
-                ("FONT", (0,0), (-1,0), "Helvetica-Bold"),
+                ("FONT", (0,0), (-1,0), DEFAULT_FONT),
                 ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
                 ("ALIGN", (0,0), (-1,-1), "LEFT"),
                 ("GRID", (0,0), (-1,-1), 0.25, colors.grey),
