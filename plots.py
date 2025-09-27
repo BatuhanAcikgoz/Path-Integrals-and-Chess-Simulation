@@ -9,6 +9,9 @@ import networkx as nx
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+plt.rcParams['font.family'] = 'DejaVu Sans'
+plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial Unicode MS', 'Liberation Sans']
+plt.rcParams['axes.unicode_minus'] = False
 # from matplotlib.ticker import ScalarFormatter  # unused
 import warnings
 warnings.filterwarnings("ignore")

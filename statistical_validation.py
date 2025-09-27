@@ -8,6 +8,9 @@ import pandas as pd
 from scipy import stats
 from scipy.stats import mannwhitneyu, wilcoxon, ks_2samp, chi2_contingency
 import matplotlib.pyplot as plt
+plt.rcParams['font.family'] = 'DejaVu Sans'
+plt.rcParams['font.sans-serif'] = ['DejaVu Sans', 'Arial Unicode MS', 'Liberation Sans']
+plt.rcParams['axes.unicode_minus'] = False
 import seaborn as sns
 from typing import Dict, List, Tuple, Any
 import warnings
@@ -475,7 +478,11 @@ class StatisticalValidator:
         report += "-" * 30 + "\n"
         for i, result in enumerate(self.results_log, 1):
             report += f"{i}. {result['test_name']}:\n"
-            report += f"   p-value: {result.get('p_value', 'N/A'):.6f}\n"
+            pval = result.get('p_value', 'N/A')
+            if isinstance(pval, float):
+                report += f"   p-value: {pval:.6f}\n"
+            else:
+                report += f"   p-value: {pval}\n"
             report += f"   Significant: {'Yes' if result.get('is_significant') else 'No'}\n"
             report += f"   Interpretation: {result.get('interpretation', 'N/A')}\n\n"
 
